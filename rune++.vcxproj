@@ -1,0 +1,225 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>18.0</VCProjectVersion>
+    <Keyword>Win32Proj</Keyword>
+    <ProjectGuid>{ee12dbec-9b52-43f0-aa53-7fe3aa6dde90}</ProjectGuid>
+    <RootNamespace>rune</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <ProjectName>rune++</ProjectName>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v145</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v145</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v145</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v145</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <AdditionalIncludeDirectories>C:\Users\david\dev\C++\Refactor\rune++\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="src\app\application.cpp" />
+    <ClCompile Include="src\app\main.cpp" />
+    <ClCompile Include="src\core\context.cpp" />
+    <ClCompile Include="src\core\input.cpp" />
+    <ClCompile Include="src\core\state.cpp" />
+    <ClCompile Include="src\core\swapchain.cpp" />
+    <ClCompile Include="src\core\window.cpp" />
+    <ClCompile Include="src\gui\gui.cpp" />
+    <ClCompile Include="src\gui\imgui\imgui.cpp" />
+    <ClCompile Include="src\gui\imgui\imgui_demo.cpp" />
+    <ClCompile Include="src\gui\imgui\imgui_draw.cpp" />
+    <ClCompile Include="src\gui\imgui\imgui_impl_glfw.cpp" />
+    <ClCompile Include="src\gui\imgui\imgui_impl_vulkan.cpp" />
+    <ClCompile Include="src\gui\imgui\imgui_tables.cpp" />
+    <ClCompile Include="src\gui\imgui\imgui_widgets.cpp" />
+    <ClCompile Include="src\loader\gltf_loader.cpp" />
+    <ClCompile Include="src\loader\gltf_materials.cpp" />
+    <ClCompile Include="src\loader\gltf_meshes.cpp" />
+    <ClCompile Include="src\loader\gltf_nodes.cpp" />
+    <ClCompile Include="src\loader\gltf_textures.cpp" />
+    <ClCompile Include="src\render\command_buffers.cpp" />
+    <ClCompile Include="src\render\descriptors.cpp" />
+    <ClCompile Include="src\render\frame_buffers.cpp" />
+    <ClCompile Include="src\render\gpu_material.cpp" />
+    <ClCompile Include="src\render\gpu_mesh.cpp" />
+    <ClCompile Include="src\render\pipelines.cpp" />
+    <ClCompile Include="src\render\renderer.cpp" />
+    <ClCompile Include="src\render\render_pass.cpp" />
+    <ClCompile Include="src\render\sync_objects.cpp" />
+    <ClCompile Include="src\resources\buffers.cpp" />
+    <ClCompile Include="src\resources\images.cpp" />
+    <ClCompile Include="src\resources\textures.cpp" />
+    <ClCompile Include="src\scene\animation.cpp" />
+    <ClCompile Include="src\scene\gather.cpp" />
+    <ClCompile Include="src\scene\materials.cpp" />
+    <ClCompile Include="src\scene\mesh.cpp" />
+    <ClCompile Include="src\scene\model.cpp" />
+    <ClCompile Include="src\scene\node.cpp" />
+    <ClCompile Include="src\scene\scene.cpp" />
+    <ClCompile Include="src\scene\texture.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\app\application.h" />
+    <ClInclude Include="src\core\config.h" />
+    <ClInclude Include="src\core\context.h" />
+    <ClInclude Include="src\core\input.h" />
+    <ClInclude Include="src\core\math.h" />
+    <ClInclude Include="src\core\state.h" />
+    <ClInclude Include="src\core\swapchain.h" />
+    <ClInclude Include="src\core\window.h" />
+    <ClInclude Include="src\gui\gui.h" />
+    <ClInclude Include="src\gui\imgui\imconfig.h" />
+    <ClInclude Include="src\gui\imgui\imgui.h" />
+    <ClInclude Include="src\gui\imgui\imgui_impl_glfw.h" />
+    <ClInclude Include="src\gui\imgui\imgui_impl_vulkan.h" />
+    <ClInclude Include="src\gui\imgui\imgui_internal.h" />
+    <ClInclude Include="src\gui\imgui\imstb_rectpack.h" />
+    <ClInclude Include="src\gui\imgui\imstb_textedit.h" />
+    <ClInclude Include="src\gui\imgui\imstb_truetype.h" />
+    <ClInclude Include="src\loader\gltf_loader.h" />
+    <ClInclude Include="src\loader\gltf_materials.h" />
+    <ClInclude Include="src\loader\gltf_meshes.h" />
+    <ClInclude Include="src\loader\gltf_nodes.h" />
+    <ClInclude Include="src\loader\gltf_textures.h" />
+    <ClInclude Include="src\render\command_buffers.h" />
+    <ClInclude Include="src\render\descriptors.h" />
+    <ClInclude Include="src\render\frame_buffers.h" />
+    <ClInclude Include="src\render\gpu_material.h" />
+    <ClInclude Include="src\render\gpu_mesh.h" />
+    <ClInclude Include="src\render\pipelines.h" />
+    <ClInclude Include="src\render\renderer.h" />
+    <ClInclude Include="src\render\render_pass.h" />
+    <ClInclude Include="src\render\sync_objects.h" />
+    <ClInclude Include="src\resources\buffers.h" />
+    <ClInclude Include="src\resources\images.h" />
+    <ClInclude Include="src\resources\textures.h" />
+    <ClInclude Include="src\scene\animation.h" />
+    <ClInclude Include="src\scene\camera.h" />
+    <ClInclude Include="src\scene\gather.h" />
+    <ClInclude Include="src\scene\materials.h" />
+    <ClInclude Include="src\scene\mesh.h" />
+    <ClInclude Include="src\scene\model.h" />
+    <ClInclude Include="src\scene\node.h" />
+    <ClInclude Include="src\scene\scene.h" />
+    <ClInclude Include="src\scene\texture.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="res\shaders\frag.spv" />
+    <None Include="res\shaders\vert.spv" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

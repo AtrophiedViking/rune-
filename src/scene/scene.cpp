@@ -1,0 +1,5 @@
+#include "scene/scene.h"
+#include "scene/camera.h"
+#include "scene/texture.h"
+#include "scene/materials.h"
+#include "scene/model.h"

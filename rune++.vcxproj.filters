@@ -1,0 +1,299 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="src">
+      <UniqueIdentifier>{1615000a-8eb3-48f8-8aa4-fcafe32bf992}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\app">
+      <UniqueIdentifier>{6e858738-545f-44f6-9c09-0822456966c8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\core">
+      <UniqueIdentifier>{b44676f0-d26e-4c74-b8be-396dd2473aaa}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\gui">
+      <UniqueIdentifier>{ff60708c-3845-4aa5-80f1-fdd03881d669}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\render">
+      <UniqueIdentifier>{5186511d-9b72-4f71-96dd-805c65226aa6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\resources">
+      <UniqueIdentifier>{006d4e2d-f9c5-4c92-962e-39ea8e9f83ac}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\scene">
+      <UniqueIdentifier>{7a090d03-19a5-420c-9b67-274d73ad3821}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\loader">
+      <UniqueIdentifier>{1b963f53-8036-4008-be16-52e47383df38}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\gui\imgui">
+      <UniqueIdentifier>{6c8cb7fc-34d9-4479-9f98-299e75fe36e9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="res">
+      <UniqueIdentifier>{5aeddb37-0b03-45f8-8476-65f4057dcc85}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="res\shaders">
+      <UniqueIdentifier>{e6d2bd02-d6fc-4c99-acfd-e03a0baf8f7d}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="src\app\application.cpp">
+      <Filter>src\app</Filter>
+    </ClCompile>
+    <ClCompile Include="src\app\main.cpp">
+      <Filter>src\app</Filter>
+    </ClCompile>
+    <ClCompile Include="src\core\context.cpp">
+      <Filter>src\core</Filter>
+    </ClCompile>
+    <ClCompile Include="src\core\input.cpp">
+      <Filter>src\core</Filter>
+    </ClCompile>
+    <ClCompile Include="src\core\swapchain.cpp">
+      <Filter>src\core</Filter>
+    </ClCompile>
+    <ClCompile Include="src\core\window.cpp">
+      <Filter>src\core</Filter>
+    </ClCompile>
+    <ClCompile Include="src\gui\gui.cpp">
+      <Filter>src\gui</Filter>
+    </ClCompile>
+    <ClCompile Include="src\loader\gltf_loader.cpp">
+      <Filter>src\loader</Filter>
+    </ClCompile>
+    <ClCompile Include="src\loader\gltf_materials.cpp">
+      <Filter>src\loader</Filter>
+    </ClCompile>
+    <ClCompile Include="src\loader\gltf_meshes.cpp">
+      <Filter>src\loader</Filter>
+    </ClCompile>
+    <ClCompile Include="src\loader\gltf_nodes.cpp">
+      <Filter>src\loader</Filter>
+    </ClCompile>
+    <ClCompile Include="src\scene\gather.cpp">
+      <Filter>src\scene</Filter>
+    </ClCompile>
+    <ClCompile Include="src\scene\materials.cpp">
+      <Filter>src\scene</Filter>
+    </ClCompile>
+    <ClCompile Include="src\scene\model.cpp">
+      <Filter>src\scene</Filter>
+    </ClCompile>
+    <ClCompile Include="src\resources\buffers.cpp">
+      <Filter>src\resources</Filter>
+    </ClCompile>
+    <ClCompile Include="src\resources\images.cpp">
+      <Filter>src\resources</Filter>
+    </ClCompile>
+    <ClCompile Include="src\resources\textures.cpp">
+      <Filter>src\resources</Filter>
+    </ClCompile>
+    <ClCompile Include="src\render\command_buffers.cpp">
+      <Filter>src\render</Filter>
+    </ClCompile>
+    <ClCompile Include="src\render\descriptors.cpp">
+      <Filter>src\render</Filter>
+    </ClCompile>
+    <ClCompile Include="src\render\pipelines.cpp">
+      <Filter>src\render</Filter>
+    </ClCompile>
+    <ClCompile Include="src\render\render_pass.cpp">
+      <Filter>src\render</Filter>
+    </ClCompile>
+    <ClCompile Include="src\render\renderer.cpp">
+      <Filter>src\render</Filter>
+    </ClCompile>
+    <ClCompile Include="src\render\sync_objects.cpp">
+      <Filter>src\render</Filter>
+    </ClCompile>
+    <ClCompile Include="src\gui\imgui\imgui.cpp">
+      <Filter>src\gui\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="src\gui\imgui\imgui_demo.cpp">
+      <Filter>src\gui\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="src\gui\imgui\imgui_draw.cpp">
+      <Filter>src\gui\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="src\gui\imgui\imgui_impl_glfw.cpp">
+      <Filter>src\gui\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="src\gui\imgui\imgui_impl_vulkan.cpp">
+      <Filter>src\gui\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="src\gui\imgui\imgui_tables.cpp">
+      <Filter>src\gui\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="src\gui\imgui\imgui_widgets.cpp">
+      <Filter>src\gui\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="src\scene\mesh.cpp">
+      <Filter>src\scene</Filter>
+    </ClCompile>
+    <ClCompile Include="src\scene\node.cpp">
+      <Filter>src\scene</Filter>
+    </ClCompile>
+    <ClCompile Include="src\scene\scene.cpp">
+      <Filter>src\scene</Filter>
+    </ClCompile>
+    <ClCompile Include="src\scene\texture.cpp">
+      <Filter>src\scene</Filter>
+    </ClCompile>
+    <ClCompile Include="src\scene\animation.cpp">
+      <Filter>src\scene</Filter>
+    </ClCompile>
+    <ClCompile Include="src\render\gpu_mesh.cpp">
+      <Filter>src\render</Filter>
+    </ClCompile>
+    <ClCompile Include="src\core\state.cpp">
+      <Filter>src\core</Filter>
+    </ClCompile>
+    <ClCompile Include="src\render\gpu_material.cpp">
+      <Filter>src\render</Filter>
+    </ClCompile>
+    <ClCompile Include="src\render\frame_buffers.cpp">
+      <Filter>src\render</Filter>
+    </ClCompile>
+    <ClCompile Include="src\loader\gltf_textures.cpp">
+      <Filter>src\loader</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\core\state.h">
+      <Filter>src\core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\scene\node.h">
+      <Filter>src\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="src\app\application.h">
+      <Filter>src\app</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\context.h">
+      <Filter>src\core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\input.h">
+      <Filter>src\core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\swapchain.h">
+      <Filter>src\core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\window.h">
+      <Filter>src\core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gui\gui.h">
+      <Filter>src\gui</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gui\imgui\imconfig.h">
+      <Filter>src\gui\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gui\imgui\imgui.h">
+      <Filter>src\gui\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gui\imgui\imgui_impl_glfw.h">
+      <Filter>src\gui\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gui\imgui\imgui_impl_vulkan.h">
+      <Filter>src\gui\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gui\imgui\imgui_internal.h">
+      <Filter>src\gui\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gui\imgui\imstb_rectpack.h">
+      <Filter>src\gui\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gui\imgui\imstb_textedit.h">
+      <Filter>src\gui\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gui\imgui\imstb_truetype.h">
+      <Filter>src\gui\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="src\loader\gltf_loader.h">
+      <Filter>src\loader</Filter>
+    </ClInclude>
+    <ClInclude Include="src\loader\gltf_materials.h">
+      <Filter>src\loader</Filter>
+    </ClInclude>
+    <ClInclude Include="src\loader\gltf_meshes.h">
+      <Filter>src\loader</Filter>
+    </ClInclude>
+    <ClInclude Include="src\loader\gltf_nodes.h">
+      <Filter>src\loader</Filter>
+    </ClInclude>
+    <ClInclude Include="src\loader\gltf_textures.h">
+      <Filter>src\loader</Filter>
+    </ClInclude>
+    <ClInclude Include="src\render\command_buffers.h">
+      <Filter>src\render</Filter>
+    </ClInclude>
+    <ClInclude Include="src\render\descriptors.h">
+      <Filter>src\render</Filter>
+    </ClInclude>
+    <ClInclude Include="src\render\pipelines.h">
+      <Filter>src\render</Filter>
+    </ClInclude>
+    <ClInclude Include="src\render\render_pass.h">
+      <Filter>src\render</Filter>
+    </ClInclude>
+    <ClInclude Include="src\render\renderer.h">
+      <Filter>src\render</Filter>
+    </ClInclude>
+    <ClInclude Include="src\render\sync_objects.h">
+      <Filter>src\render</Filter>
+    </ClInclude>
+    <ClInclude Include="src\resources\buffers.h">
+      <Filter>src\resources</Filter>
+    </ClInclude>
+    <ClInclude Include="src\resources\images.h">
+      <Filter>src\resources</Filter>
+    </ClInclude>
+    <ClInclude Include="src\resources\textures.h">
+      <Filter>src\resources</Filter>
+    </ClInclude>
+    <ClInclude Include="src\scene\gather.h">
+      <Filter>src\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="src\scene\materials.h">
+      <Filter>src\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="src\scene\model.h">
+      <Filter>src\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="src\scene\mesh.h">
+      <Filter>src\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="src\scene\scene.h">
+      <Filter>src\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="src\scene\texture.h">
+      <Filter>src\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="src\scene\animation.h">
+      <Filter>src\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="src\scene\camera.h">
+      <Filter>src\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\config.h">
+      <Filter>src\core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\render\gpu_mesh.h">
+      <Filter>src\render</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\math.h">
+      <Filter>src\core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\render\gpu_material.h">
+      <Filter>src\render</Filter>
+    </ClInclude>
+    <ClInclude Include="src\render\frame_buffers.h">
+      <Filter>src\render</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="res\shaders\frag.spv">
+      <Filter>res\shaders</Filter>
+    </None>
+    <None Include="res\shaders\vert.spv">
+      <Filter>res\shaders</Filter>
+    </None>
+  </ItemGroup>
+</Project>
