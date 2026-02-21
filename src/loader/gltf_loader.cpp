@@ -80,6 +80,8 @@ void modelLoad(State* state, std::string modelPath)
 	model->baseTextureIndex = static_cast<uint32_t>(state->scene->textures.size());
 	state->scene->materials.reserve(gltfModel.materials.size());
 
+	std::unordered_map<int, TextureRole> textureRoles;
+
 	for (const auto& m : gltfModel.materials) {
 		Material* mat = new Material{};
 		// Base color factor
@@ -115,6 +117,8 @@ void modelLoad(State* state, std::string modelPath)
 				m.pbrMetallicRoughness.baseColorTexture,
 				mat->baseColorTransform
 			);
+
+			textureRoles[mat->baseColorTextureIndex] = TextureRole::BaseColor;
 		}
 
 		// Metallic-roughness texture
@@ -126,6 +130,8 @@ void modelLoad(State* state, std::string modelPath)
 				m.pbrMetallicRoughness.metallicRoughnessTexture,
 				mat->metallicRoughnessTransform
 			);
+
+			textureRoles[mat->metallicRoughnessTextureIndex] = TextureRole::MetallicRoughness;
 		}
 
 		// Normal texture
@@ -137,6 +143,8 @@ void modelLoad(State* state, std::string modelPath)
 				m.normalTexture,
 				mat->normalTransform
 			);
+
+			textureRoles[mat->normalTextureIndex] = TextureRole::Normal;
 		}
 
 		// Occlusion texture
@@ -148,6 +156,8 @@ void modelLoad(State* state, std::string modelPath)
 				m.occlusionTexture,
 				mat->occlusionTransform
 			);
+
+			textureRoles[mat->occlusionTextureIndex] = TextureRole::Occlusion;
 		}
 
 		// Emissive texture
@@ -159,7 +169,10 @@ void modelLoad(State* state, std::string modelPath)
 				m.emissiveTexture,
 				mat->emissiveTransform
 			);
+
+			textureRoles[mat->emissiveTextureIndex] = TextureRole::Emissive;
 		}
+
 
 
 		// Scalars
@@ -183,9 +196,18 @@ void modelLoad(State* state, std::string modelPath)
 	createMeshBuffers(state, model->rootNode);
 
 	if (!gltfModel.images.empty()) {
-		for (const auto& image : gltfModel.images) {
+		for (int i = 0; i < gltfModel.images.size(); i++) {
+			const auto& image = gltfModel.images[i];
+
 			Texture* tex = new Texture{};
-			tex->name = image.name;
+
+			int globalIndex = model->baseTextureIndex + i;
+
+			// Assign role BEFORE creating the texture
+			if (textureRoles.count(globalIndex))
+				tex->role = textureRoles[globalIndex];
+			else
+				tex->role = TextureRole::BaseColor; // safe default
 
 			createTextureFromMemory(
 				state,

@@ -266,7 +266,7 @@ void createMaterialDescriptorSets(State* state)
 			&mat->materialBuffer, &mat->materialMemory);
 
 		void* data = nullptr;
-		vkMapMemory(state->context->device, mat->materialMemory, 0, sizeof(Material), 0, &data);
+		vkMapMemory(state->context->device, mat->materialMemory, 0, sizeof(MaterialGPU), 0, &data);
 		memcpy(data, &gpu, sizeof(MaterialGPU));
 		vkUnmapMemory(state->context->device, mat->materialMemory);
 

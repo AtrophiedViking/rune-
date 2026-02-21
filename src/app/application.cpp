@@ -17,10 +17,8 @@
 #include "core/context.h"
 #include "core/window.h"
 #include "core/config.h"
-
-#include "gui/gui.h"
-
 #include "core/input.h"
+#include "gui/gui.h"
 #include "core/state.h"	
 void init(State *state) {
 	state->texture = new Texture{};
@@ -74,7 +72,7 @@ void init(State *state) {
 	state->scene->models[1]->setTransform(
 		{ -1.0f, 0.0f, 0.0f },
 		{ 0.0f, 0.0f, 0.0f },
-		{ 10.0f, 10.0f, 10.0f }
+		{ 0.003f, 0.003f, 0.003f }
 	);
 	state->scene->models[2]->setTransform(
 		{ 2.0f, 0.0f, 0.0f },

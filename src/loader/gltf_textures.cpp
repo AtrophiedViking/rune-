@@ -206,10 +206,24 @@ void createTextureFromMemory(
     VkDevice device = state->context->device;
 
     // 1. Determine format
-    VkFormat format = VK_FORMAT_R8G8B8A8_SRGB;
-    if (channels == 3)
-        format = VK_FORMAT_R8G8B8_SRGB;
+    TextureRole role = outTex.role;
+    bool linear =
+        role == TextureRole::Normal ||
+        role == TextureRole::MetallicRoughness ||
+        role == TextureRole::Occlusion;
+   
+    VkFormat format;
 
+    if (linear) {
+        format = VK_FORMAT_R8G8B8A8_UNORM;
+        if (channels == 3)
+            format = VK_FORMAT_R8G8B8_UNORM;
+    }
+    else {
+        format = VK_FORMAT_R8G8B8A8_SRGB;
+        if (channels == 3)
+            format = VK_FORMAT_R8G8B8_SRGB;
+    }
     outTex.format = format;
 
     // 2. Create staging buffer

@@ -274,6 +274,7 @@ void processNode(tinygltf::Model& gltfModel, tinygltf::Node& node, Node* parent,
 				}
 
 				// TANGENT
+				v.tangent = { 1.0f, 0.0f, 0.0f, 1.0f };
 				if (hasTangents) {
 					const float* t = reinterpret_cast<const float*>(
 						&tanBuffer->data[tanBufferView->byteOffset + tanAccessor->byteOffset + i * tanStride]);

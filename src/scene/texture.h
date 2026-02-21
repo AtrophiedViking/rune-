@@ -11,6 +11,15 @@
 #include <vector>
 #include <array>
 
+enum TextureRole {
+	BaseColor,
+	MetallicRoughness,
+	Normal,
+	Tangent,
+	Occlusion,
+	Emissive
+};
+
 struct Texture{
 	std::string name;
 	VkImage textureImage;
@@ -30,6 +39,7 @@ struct Texture{
 	VkDescriptorSet descriptorSet;
 	VkFormat format;
 
+	TextureRole role = TextureRole::BaseColor;
 };
 
 struct TextureTransform {

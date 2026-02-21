@@ -49,7 +49,7 @@ layout(location = 4) out vec3 fragTangent;
 layout(location = 5) out vec3 fragBitangent;
 
 void main() {
-    mat4 modelNode = pc.nodeMatrix;
+    mat4 modelNode = ubo.model * pc.nodeMatrix;
 
     vec4 worldPos = modelNode * vec4(inPosition, 1.0);
     fragWorldPos = worldPos.xyz;
@@ -57,6 +57,7 @@ void main() {
     mat3 normalMatrix = transpose(inverse(mat3(modelNode)));
     vec3 N = normalize(normalMatrix * inNormal);
     vec3 T = normalize(normalMatrix * inTangent.xyz);
+    T = normalize(T - N * dot(N, T));
     vec3 B = cross(N, T) * inTangent.w;
 
     fragNormal   = N;
