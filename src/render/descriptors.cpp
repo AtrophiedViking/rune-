@@ -362,6 +362,95 @@ void createMaterialDescriptorSets(State* state)
 		);
 	}
 }
+void presentSetLayoutCreate(State* state) {
+	VkDescriptorSetLayoutBinding sceneColorBinding{
+		.binding = 0,
+		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+		.pImmutableSamplers = nullptr,
+	};
+
+	VkDescriptorSetLayoutCreateInfo layoutInfo{
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+		.bindingCount = 1,
+		.pBindings = &sceneColorBinding,
+	};
+
+	PANIC(vkCreateDescriptorSetLayout(state->context->device,
+		&layoutInfo,
+		nullptr,
+		&state->renderer->presentSetLayout),
+		"Failed To Create Present Descriptor Set Layout");
+}
+void presentDescriptorSetAllocate(State* state) {
+	VkDescriptorSetLayout layout = state->renderer->presentSetLayout;
+
+	VkDescriptorSetAllocateInfo allocInfo{
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+		.descriptorPool = state->renderer->descriptorPool, // or whatever pool you use
+		.descriptorSetCount = 1,
+		.pSetLayouts = &layout,
+	};
+
+	PANIC(vkAllocateDescriptorSets(state->context->device,
+		&allocInfo,
+		&state->renderer->presentSet),
+		"Failed To Allocate Present Descriptor Set");
+}
+void presentDescriptorSetUpdate(State* state) {
+	VkDescriptorImageInfo imgInfo{
+		.sampler = state->texture->sceneColorSampler,
+		.imageView = state->texture->sceneColorImageView,
+		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+	};
+
+	VkWriteDescriptorSet write{
+		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+		.dstSet = state->renderer->presentSet,
+		.dstBinding = 0,
+		.descriptorCount = 1,
+		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		.pImageInfo = &imgInfo,
+	};
+
+	vkUpdateDescriptorSets(state->context->device, 1, &write, 0, nullptr);
+}
+void presentSamplerCreate(State* state) {
+	VkSamplerCreateInfo samplerInfo{
+		.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+		.magFilter = VK_FILTER_LINEAR,
+		.minFilter = VK_FILTER_LINEAR,
+		.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+		.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+		.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+		.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+		.mipLodBias = 0.0f,
+		.anisotropyEnable = VK_FALSE,
+		.maxAnisotropy = 1.0f,
+		.compareEnable = VK_FALSE,
+		.compareOp = VK_COMPARE_OP_ALWAYS,
+		.minLod = 0.0f,
+		.maxLod = 0.0f,
+		.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
+		.unnormalizedCoordinates = VK_FALSE,
+	};
+
+	PANIC(vkCreateSampler(state->context->device,
+		&samplerInfo,
+		nullptr,
+		&state->texture->sceneColorSampler),
+		"Failed To Create Present Sampler");
+}
+void destroySceneColorSampler(State* state) {
+	if (state->texture->sceneColorSampler != VK_NULL_HANDLE) {
+		vkDestroySampler(state->context->device,
+			state->texture->sceneColorSampler,
+			nullptr);
+		state->texture->sceneColorSampler = VK_NULL_HANDLE;
+	}
+}
+
 
 void uniformBuffersCreate(State* state) {
 	// One global UBO per frame in flight

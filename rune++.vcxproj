@@ -220,6 +220,8 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="res\shaders\frag.spv" />
+    <None Include="res\shaders\present_frag.spv" />
+    <None Include="res\shaders\present_vert.spv" />
     <None Include="res\shaders\vert.spv" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

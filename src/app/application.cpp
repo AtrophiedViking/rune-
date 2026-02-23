@@ -36,6 +36,7 @@ void init(State *state) {
 	swapchainImageGet(state);
 	imageViewsCreate(state);
 	renderPassCreate(state);
+	presentRenderPassCreate(state);
 
 	guiRenderPassCreate(state);
 	guiFramebuffersCreate(state);
@@ -45,17 +46,23 @@ void init(State *state) {
 	// MUST come BEFORE pipeline creation
 	createGlobalSetLayout(state);
 	createTextureSetLayout(state);
+	presentSetLayoutCreate(state);
 
 	graphicsPipelineCreate(state);
 	tranparencyPipelineCreate(state);
+	presentPipelineCreate(state);
+
 	commandPoolCreate(state);
 
 	printf("init: msaaSamples = %d\n", state->config->msaaSamples);
 
 	colorResourceCreate(state);
 	depthResourceCreate(state);
-	frameBuffersCreate(state);
+	sceneColorResourceCreate(state);
+	presentSamplerCreate(state);
 
+	frameBuffersCreate(state);
+	presentFramebuffersCreate(state);
 	callbackSetup(state);
 
 	// Load model + textures BEFORE descriptor sets
@@ -88,6 +95,9 @@ void init(State *state) {
 
 	descriptorSetsCreate(state);        // global UBO set (set = 0)
 	createMaterialDescriptorSets(state); // texture sets (set = 1)
+
+	presentDescriptorSetAllocate(state);   // ← add
+	presentDescriptorSetUpdate(state);     // ← add
 
 	commandBufferGet(state);
 	commandBufferRecord(state);
@@ -125,8 +135,11 @@ void cleanup(State *state) {
 	vertexBufferDestroy(state);
 	syncObjectsDestroy(state);
 	commandPoolDestroy(state);
+	presentPipelineDestroy(state);
+	destroySceneColorSampler(state);
 	tranparencyPipelineDestroy(state);
 	graphicsPipelineDestroy(state);
+	presentRenderPassDestroy(state);
 	renderPassDestroy(state);
 	deviceDestroy(state);
 	windowDestroy(state);

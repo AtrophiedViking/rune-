@@ -30,8 +30,7 @@ void frameBuffersCreate(State* state) {
                 state->texture->depthImageView         // depth
             };
 
-            framebufferInfo.attachmentCount =
-                static_cast<uint32_t>(attachments.size());
+            framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
             framebufferInfo.pAttachments = attachments.data();
 
             PANIC(vkCreateFramebuffer(state->context->device,
@@ -41,11 +40,10 @@ void frameBuffersCreate(State* state) {
                 "Failed To Create Framebuffer");
         }
         else {
-            // MSAA: color = MSAA image, depth = depth, resolve = swapchain
             std::array<VkImageView, 3> attachments = {
-                state->texture->colorImageView,        // MSAA color
-                state->texture->depthImageView,        // depth
-                state->window.swapchain.imageViews[i]  // resolve / present
+              state->texture->colorImageView,        // MSAA color
+              state->texture->depthImageView,        // depth
+              state->texture->sceneColorImageView    // resolve → sampleable image ✔
             };
 
             framebufferInfo.attachmentCount =
@@ -60,7 +58,6 @@ void frameBuffersCreate(State* state) {
         }
     }
 }
-
 void frameBuffersDestroy(State* state) {
 	uint32_t frameBufferCount = state->window.swapchain.imageCount;
 	for (int i = 0; i < (int)frameBufferCount; i++) {
@@ -68,3 +65,43 @@ void frameBuffersDestroy(State* state) {
 
 	};
 };
+
+void presentFramebuffersCreate(State* state) {
+    uint32_t count = state->window.swapchain.imageCount;
+
+    state->buffers->presentFramebuffers =
+        (VkFramebuffer*)malloc(count * sizeof(VkFramebuffer));
+
+    PANIC(!state->buffers->presentFramebuffers,
+        "Failed To Allocate Present Framebuffer Array");
+
+    for (uint32_t i = 0; i < count; i++) {
+        VkImageView attachments[] = {
+            state->window.swapchain.imageViews[i]   // only attachment
+        };
+
+        VkFramebufferCreateInfo framebufferInfo{
+            .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+            .renderPass = state->renderer->presentRenderPass,
+            .attachmentCount = 1,
+            .pAttachments = attachments,
+            .width = state->window.swapchain.imageExtent.width,
+            .height = state->window.swapchain.imageExtent.height,
+            .layers = 1,
+        };
+
+        PANIC(vkCreateFramebuffer(state->context->device,
+            &framebufferInfo,
+            nullptr,
+            &state->buffers->presentFramebuffers[i]),
+            "Failed To Create Present Framebuffer");
+    }
+}
+void presentFramebuffersDestroy(State* state) {
+    uint32_t count = state->window.swapchain.imageCount;
+    for (uint32_t i = 0; i < count; i++) {
+        vkDestroyFramebuffer(state->context->device,
+            state->buffers->presentFramebuffers[i],
+            nullptr);
+    }
+}

@@ -3,3 +3,6 @@
 struct State;
 void frameBuffersCreate(State* state);
 void frameBuffersDestroy(State* state);
+
+void presentFramebuffersCreate(State* state);
+void presentFramebuffersDestroy(State* state);

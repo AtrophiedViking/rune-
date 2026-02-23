@@ -10,3 +10,6 @@ void graphicsPipelineDestroy(State* state);
 
 void tranparencyPipelineCreate(State* state);
 void tranparencyPipelineDestroy(State* state);
+
+void presentPipelineCreate(State* state);
+void presentPipelineDestroy(State* state);

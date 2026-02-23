@@ -10,6 +10,7 @@ struct Vertex;
 struct Buffers{
 	VkCommandBuffer* commandBuffer;
 	VkFramebuffer* framebuffers;
+	VkFramebuffer* presentFramebuffers;
 	VkBuffer vertexBuffer;
 	VkDeviceMemory vertexBufferMemory;
 	VkBuffer indexBuffer;

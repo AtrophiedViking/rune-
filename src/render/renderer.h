@@ -35,6 +35,8 @@ struct Renderer {
 	//Shaders
 	VkShaderModule vertShaderModule;
 	VkShaderModule fragShaderModule;
+	VkShaderModule presentFragShaderModule;
+	VkShaderModule presentVertShaderModule;
 
 	//graphicsPipeline
 	VkPipeline graphicsPipeline;
@@ -47,6 +49,13 @@ struct Renderer {
 	VkDescriptorPool transparencyDescriptorPool;
 	VkPipelineLayout transparencyPipelineLayout;
 	VkRenderPass transparencyRenderPass;
+
+	VkPipeline presentPipeline;
+	VkDescriptorSetLayout presentSetLayout;
+	VkDescriptorSet presentSet;
+	VkDescriptorPool presentDescriptorPool;
+	VkPipelineLayout presentPipelineLayout;
+	VkRenderPass presentRenderPass;
 
 	std::vector<MaterialGPU> materialsGPU;
 	std::vector<MeshGPU> meshesGPU;

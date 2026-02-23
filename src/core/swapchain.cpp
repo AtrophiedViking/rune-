@@ -1,5 +1,6 @@
 #include "render/command_buffers.h"
 #include "render/frame_buffers.h"
+#include "render/descriptors.h"
 #include "render/render_pass.h"
 #include "resources/images.h"
 #include "gui/gui.h"
@@ -116,9 +117,10 @@ void swapchainDestroy(State* state) {
 };
 
 void swapchainCleanup(State* state) {
-	
+	sceneColorResourceDestroy(state);
 	colorResourceDestroy(state);
 	depthBufferDestroy(state);
+	presentFramebuffersDestroy(state);
 	frameBuffersDestroy(state);
 	imageViewsDestroy(state);
 	swapchainDestroy(state);
@@ -140,11 +142,12 @@ void swapchainRecreate(State* state) {
 	transitionSwapchainImagesToPresent(state);
 
 	imageViewsCreate(state);
+	sceneColorResourceCreate(state);
 	colorResourceCreate(state);
 	depthResourceCreate(state);
-
-
 	frameBuffersCreate(state);
+	presentFramebuffersCreate(state);
+	presentDescriptorSetUpdate(state);
 	guiFramebuffersCreate(state);
 	ImGui_ImplVulkan_SetMinImageCount(state->window.swapchain.imageCount);
 	commandBufferRecord(state);

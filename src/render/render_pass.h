@@ -5,6 +5,10 @@ struct State;
 void renderPassCreate(State* state);
 void renderPassDestroy(State* state);
 
+void presentRenderPassCreate(State* state);
+void presentRenderPassDestroy(State * state);
+
+
 VkSampleCountFlagBits getMaxUsableSampleCount(State* state);
 
 void colorResourceCreate(State* state);

@@ -13,6 +13,11 @@ void createGlobalSetLayout(State* state);
 // set 1: texture (for now, just baseColor at binding 0)
 void createTextureSetLayout(State* state);
 void descriptorSetLayoutDestroy(State* state);
+void presentSetLayoutCreate(State* state);
+void presentDescriptorSetAllocate(State* state);
+void presentDescriptorSetUpdate(State* state);
+void presentSamplerCreate(State* state);
+void destroySceneColorSampler(State* state);
 
 void descriptorPoolCreate(State* state);
 VkResult allocateDescriptorSetsWithResize(State* state, const VkDescriptorSetAllocateInfo* allocInfo, VkDescriptorSet* sets);

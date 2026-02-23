@@ -75,6 +75,9 @@ void commandBufferRecord(State* state)
     };
     vkBeginCommandBuffer(cmd, &beginInfo);
 
+    // ─────────────────────────────────────────────
+    // PASS 1: MAIN SCENE RENDER PASS
+    // ─────────────────────────────────────────────
     std::array<VkClearValue, 2> clearValues{};
     clearValues[0].color = { state->config->backgroundColor.color };
     clearValues[1].depthStencil = { 1.0f, 0 };
@@ -84,11 +87,11 @@ void commandBufferRecord(State* state)
         .renderPass = state->renderer->renderPass,
         .framebuffer = state->buffers->framebuffers[state->renderer->imageAquiredIndex],
         .clearValueCount = static_cast<uint32_t>(clearValues.size()),
-        .pClearValues = clearValues.data()
+        .pClearValues = clearValues.data(),
     };
     renderPassInfo.renderArea = {
-            .offset = { 0, 0 },
-            .extent = state->window.swapchain.imageExtent
+        .offset = { 0, 0 },
+        .extent = state->window.swapchain.imageExtent
     };
 
     vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
@@ -109,7 +112,7 @@ void commandBufferRecord(State* state)
     };
     vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-    // Bind global UBO (set = 0)
+    // Global UBO (set = 0)
     vkCmdBindDescriptorSets(
         cmd,
         VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -122,7 +125,7 @@ void commandBufferRecord(State* state)
     );
 
     // ─────────────────────────────────────────────
-    // GLOBAL DRAW ITEM COLLECTION
+    // DRAW LIST BUILD
     // ─────────────────────────────────────────────
     std::vector<DrawItem> allItems;
 
@@ -137,9 +140,6 @@ void commandBufferRecord(State* state)
         );
     }
 
-    // ─────────────────────────────────────────────
-    // SPLIT OPAQUE / TRANSPARENT
-    // ─────────────────────────────────────────────
     std::vector<DrawItem> opaqueItems;
     std::vector<DrawItem> transparentItems;
 
@@ -151,9 +151,7 @@ void commandBufferRecord(State* state)
             opaqueItems.push_back(item);
     }
 
-    // ─────────────────────────────────────────────
-    // DRAW OPAQUE FIRST
-    // ─────────────────────────────────────────────
+    // OPAQUE
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, state->renderer->graphicsPipeline);
 
     for (const DrawItem& item : opaqueItems)
@@ -167,9 +165,7 @@ void commandBufferRecord(State* state)
         );
     }
 
-    // ─────────────────────────────────────────────
-    // SORT TRANSPARENT BACK-TO-FRONT
-    // ─────────────────────────────────────────────
+    // TRANSPARENT (back-to-front)
     std::sort(
         transparentItems.begin(),
         transparentItems.end(),
@@ -179,9 +175,6 @@ void commandBufferRecord(State* state)
         }
     );
 
-    // ─────────────────────────────────────────────
-    // DRAW TRANSPARENT LAST
-    // ─────────────────────────────────────────────
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, state->renderer->transparencyPipeline);
 
     for (const DrawItem& item : transparentItems)
@@ -197,9 +190,54 @@ void commandBufferRecord(State* state)
 
     vkCmdEndRenderPass(cmd);
 
+    // ─────────────────────────────────────────────
+    // PASS 2: PRESENT RENDER PASS (FULLSCREEN TRIANGLE)
+    // ─────────────────────────────────────────────
+    VkClearValue presentClear{};
+    presentClear.color = { 0.0f, 0.0f, 0.0f, 1.0f };
+
+    VkRenderPassBeginInfo presentPassInfo{
+        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+        .renderPass = state->renderer->presentRenderPass,
+        .framebuffer = state->buffers->presentFramebuffers[state->renderer->imageAquiredIndex],
+        .clearValueCount = 1,
+        .pClearValues = &presentClear,
+    };
+    presentPassInfo.renderArea = {
+        .offset = { 0, 0 },
+        .extent = state->window.swapchain.imageExtent
+    };
+
+    vkCmdBeginRenderPass(cmd, &presentPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+    // Reuse same viewport/scissor
+    vkCmdSetViewport(cmd, 0, 1, &viewport);
+    vkCmdSetScissor(cmd, 0, 1, &scissor);
+
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, state->renderer->presentPipeline);
+
+    // Descriptor set that binds sceneColorImageView as sampler2D
+    vkCmdBindDescriptorSets(
+        cmd,
+        VK_PIPELINE_BIND_POINT_GRAPHICS,
+        state->renderer->presentPipelineLayout,
+        0,
+        1,
+        &state->renderer->presentSet,
+        0,
+        nullptr
+    );
+
+    // Fullscreen triangle
+    vkCmdDraw(cmd, 3, 1, 0, 0);
+
+    vkCmdEndRenderPass(cmd);
+
+    // ─────────────────────────────────────────────
+    // GUI (on top of swapchain)
+    // ─────────────────────────────────────────────
     guiDraw(state, cmd);
 
     PANIC(vkEndCommandBuffer(cmd), "Failed To Record Command Buffer");
 }
-
 
