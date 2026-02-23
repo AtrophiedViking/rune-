@@ -51,8 +51,8 @@ void graphicsPipelineCreate(State* state) {
 
 	//DynamicStates
 	std::vector<VkDynamicState> dynamicStates = {
-	VK_DYNAMIC_STATE_VIEWPORT,
-	VK_DYNAMIC_STATE_SCISSOR
+		VK_DYNAMIC_STATE_VIEWPORT,
+		VK_DYNAMIC_STATE_SCISSOR
 	};
 	VkPipelineDynamicStateCreateInfo dynamicState{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
@@ -99,14 +99,14 @@ void graphicsPipelineCreate(State* state) {
 	};
 	//Rasterizor
 	VkPipelineRasterizationStateCreateInfo rasterizer{
-	.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-	.depthClampEnable = VK_FALSE,
-	.rasterizerDiscardEnable = VK_FALSE,
-	.polygonMode = VK_POLYGON_MODE_FILL,
-	.cullMode = VK_CULL_MODE_BACK_BIT,
-	.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
-	.depthBiasEnable = VK_TRUE,
-	.lineWidth = 1.0f,
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+		.depthClampEnable = VK_FALSE,
+		.rasterizerDiscardEnable = VK_FALSE,
+		.polygonMode = VK_POLYGON_MODE_FILL,
+		.cullMode = VK_CULL_MODE_BACK_BIT,
+		.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+		.depthBiasEnable = VK_TRUE,
+		.lineWidth = 1.0f,
 	};
 	//MultiSampling
 	VkPipelineMultisampleStateCreateInfo multisampling{
@@ -255,14 +255,14 @@ void tranparencyPipelineCreate(State* state) {
 	};
 	//Rasterizor
 	VkPipelineRasterizationStateCreateInfo rasterizer{
-	.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-	.depthClampEnable = VK_FALSE,
-	.rasterizerDiscardEnable = VK_FALSE,
-	.polygonMode = VK_POLYGON_MODE_FILL,
-	.cullMode = VK_CULL_MODE_NONE,
-	.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
-	.depthBiasEnable = VK_FALSE,
-	.lineWidth = 1.0f,
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+		.depthClampEnable = VK_FALSE,
+		.rasterizerDiscardEnable = VK_FALSE,
+		.polygonMode = VK_POLYGON_MODE_FILL,
+		.cullMode = VK_CULL_MODE_NONE,
+		.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+		.depthBiasEnable = VK_FALSE,
+		.lineWidth = 1.0f,
 	};
 	//MultiSampling
 	VkPipelineMultisampleStateCreateInfo multisampling{

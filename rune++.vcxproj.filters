@@ -84,9 +84,6 @@
     <ClCompile Include="src\resources\images.cpp">
       <Filter>src\resources</Filter>
     </ClCompile>
-    <ClCompile Include="src\resources\textures.cpp">
-      <Filter>src\resources</Filter>
-    </ClCompile>
     <ClCompile Include="src\render\command_buffers.cpp">
       <Filter>src\render</Filter>
     </ClCompile>
@@ -154,6 +151,9 @@
       <Filter>src\render</Filter>
     </ClCompile>
     <ClCompile Include="src\loader\gltf_textures.cpp">
+      <Filter>src\loader</Filter>
+    </ClCompile>
+    <ClCompile Include="src\loader\gltf_extensions.cpp">
       <Filter>src\loader</Filter>
     </ClCompile>
   </ItemGroup>
@@ -245,9 +245,6 @@
     <ClInclude Include="src\resources\images.h">
       <Filter>src\resources</Filter>
     </ClInclude>
-    <ClInclude Include="src\resources\textures.h">
-      <Filter>src\resources</Filter>
-    </ClInclude>
     <ClInclude Include="src\scene\gather.h">
       <Filter>src\scene</Filter>
     </ClInclude>
@@ -286,6 +283,9 @@
     </ClInclude>
     <ClInclude Include="src\render\frame_buffers.h">
       <Filter>src\render</Filter>
+    </ClInclude>
+    <ClInclude Include="src\loader\gltf_extensions.h">
+      <Filter>src\loader</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

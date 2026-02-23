@@ -1,11 +1,15 @@
-#include "vulkan/vulkan.h"
 #include "loader/gltf_nodes.h"
 #include "scene/model.h"
 #include "scene/node.h"
 #include "core/math.h"
 #include <glfw/glfw3.h>
 #include "tiny_gltf.h"
-void processNode(tinygltf::Model& gltfModel, tinygltf::Node& node, Node* parent, const std::string& baseDir, Model* model)
+void processNode(
+	const tinygltf::Model& gltf,
+	const tinygltf::Node& node,
+	Node* parent,
+	const std::string& baseDir,
+	Model* model)
 {
 	Node* newNode = new Node();
 	newNode->name = node.name;
@@ -57,7 +61,7 @@ void processNode(tinygltf::Model& gltfModel, tinygltf::Node& node, Node* parent,
 	// Process mesh
 	// ─────────────────────────────────────────────
 	if (node.mesh >= 0) {
-		const tinygltf::Mesh& mesh = gltfModel.meshes[node.mesh];
+		const tinygltf::Mesh& mesh = gltf.meshes[node.mesh];
 
 		for (const auto& primitive : mesh.primitives) {
 			Mesh* newMesh = new Mesh;
@@ -65,9 +69,9 @@ void processNode(tinygltf::Model& gltfModel, tinygltf::Node& node, Node* parent,
 			// ─────────────────────────────────────────────
 			// Index buffer
 			// ─────────────────────────────────────────────
-			const auto& indexAccessor = gltfModel.accessors[primitive.indices];
-			const auto& indexBufferView = gltfModel.bufferViews[indexAccessor.bufferView];
-			const auto& indexBuffer = gltfModel.buffers[indexBufferView.buffer];
+			const auto& indexAccessor = gltf.accessors[primitive.indices];
+			const auto& indexBufferView = gltf.bufferViews[indexAccessor.bufferView];
+			const auto& indexBuffer = gltf.buffers[indexBufferView.buffer];
 
 			size_t indexCount = indexAccessor.count;
 
@@ -85,9 +89,9 @@ void processNode(tinygltf::Model& gltfModel, tinygltf::Node& node, Node* parent,
 			// ─────────────────────────────────────────────
 			// POSITION (float only)
 			// ─────────────────────────────────────────────
-			const auto& posAccessor = gltfModel.accessors[primitive.attributes.at("POSITION")];
-			const auto& posBufferView = gltfModel.bufferViews[posAccessor.bufferView];
-			const auto& posBuffer = gltfModel.buffers[posBufferView.buffer];
+			const auto& posAccessor = gltf.accessors[primitive.attributes.at("POSITION")];
+			const auto& posBufferView = gltf.bufferViews[posAccessor.bufferView];
+			const auto& posBuffer = gltf.buffers[posBufferView.buffer];
 
 			if (posAccessor.componentType != TINYGLTF_COMPONENT_TYPE_FLOAT)
 				throw std::runtime_error("POSITION must be FLOAT");
@@ -106,12 +110,12 @@ void processNode(tinygltf::Model& gltfModel, tinygltf::Node& node, Node* parent,
 			size_t normalStride = 0;
 
 			if (hasNormals) {
-				normalAccessor = &gltfModel.accessors[primitive.attributes.at("NORMAL")];
+				normalAccessor = &gltf.accessors[primitive.attributes.at("NORMAL")];
 				if (normalAccessor->componentType != TINYGLTF_COMPONENT_TYPE_FLOAT)
 					throw std::runtime_error("NORMAL must be FLOAT");
 
-				normalBufferView = &gltfModel.bufferViews[normalAccessor->bufferView];
-				normalBuffer = &gltfModel.buffers[normalBufferView->buffer];
+				normalBufferView = &gltf.bufferViews[normalAccessor->bufferView];
+				normalBuffer = &gltf.buffers[normalBufferView->buffer];
 				normalStride = normalBufferView->byteStride ?
 					normalBufferView->byteStride :
 					3 * sizeof(float);
@@ -119,16 +123,16 @@ void processNode(tinygltf::Model& gltfModel, tinygltf::Node& node, Node* parent,
 			// ─────────────────────────────────────────────
 			// TEXCOORD_0 (float or normalized int)
 			// ─────────────────────────────────────────────
-			bool hasTexCoords = primitive.attributes.count("TEXCOORD_0") > 0;
+			bool hasTexCoords0 = primitive.attributes.count("TEXCOORD_0") > 0;
 			const tinygltf::Accessor* uvAccessor = nullptr;
 			const tinygltf::BufferView* uvBufferView = nullptr;
 			const tinygltf::Buffer* uvBuffer = nullptr;
 			size_t uvStride = 0;
 
-			if (hasTexCoords) {
-				uvAccessor = &gltfModel.accessors[primitive.attributes.at("TEXCOORD_0")];
-				uvBufferView = &gltfModel.bufferViews[uvAccessor->bufferView];
-				uvBuffer = &gltfModel.buffers[uvBufferView->buffer];
+			if (hasTexCoords0) {
+				uvAccessor = &gltf.accessors[primitive.attributes.at("TEXCOORD_0")];
+				uvBufferView = &gltf.bufferViews[uvAccessor->bufferView];
+				uvBuffer = &gltf.buffers[uvBufferView->buffer];
 
 				if (uvAccessor->type != TINYGLTF_TYPE_VEC2)
 					throw std::runtime_error("TEXCOORD_0 must be VEC2");
@@ -147,6 +151,36 @@ void processNode(tinygltf::Model& gltfModel, tinygltf::Node& node, Node* parent,
 				}
 			}
 
+			// ─────────────────────────────────────────────
+			// TEXCOORD_1 (float or normalized int)
+			// ─────────────────────────────────────────────
+			bool hasTexCoords1 = primitive.attributes.count("TEXCOORD_1") > 0;
+			const tinygltf::Accessor* uv1Accessor = nullptr;
+			const tinygltf::BufferView* uv1BufferView = nullptr;
+			const tinygltf::Buffer* uv1Buffer = nullptr;
+			size_t uv1Stride = 0;
+
+			if (hasTexCoords1) {
+				uv1Accessor = &gltf.accessors[primitive.attributes.at("TEXCOORD_1")];
+				uv1BufferView = &gltf.bufferViews[uv1Accessor->bufferView];
+				uv1Buffer = &gltf.buffers[uv1BufferView->buffer];
+
+				if (uv1Accessor->type != TINYGLTF_TYPE_VEC2)
+					throw std::runtime_error("TEXCOORD_1 must be VEC2");
+
+				if (uv1BufferView->byteStride != 0) {
+					uv1Stride = uv1BufferView->byteStride;
+				}
+				else {
+					switch (uv1Accessor->componentType) {
+					case TINYGLTF_COMPONENT_TYPE_FLOAT:          uv1Stride = 2 * sizeof(float);   break;
+					case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:  uv1Stride = 2 * sizeof(uint8_t); break;
+					case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT: uv1Stride = 2 * sizeof(uint16_t); break;
+					default:
+						throw std::runtime_error("Unsupported TEXCOORD_1 componentType");
+					}
+				}
+			}
 
 			// ─────────────────────────────────────────────
 			// COLOR_0 (float or normalized int)
@@ -158,9 +192,9 @@ void processNode(tinygltf::Model& gltfModel, tinygltf::Node& node, Node* parent,
 			size_t colorStride = 0;
 
 			if (hasColors) {
-				colorAccessor = &gltfModel.accessors[primitive.attributes.at("COLOR_0")];
-				colorBufferView = &gltfModel.bufferViews[colorAccessor->bufferView];
-				colorBuffer = &gltfModel.buffers[colorBufferView->buffer];
+				colorAccessor = &gltf.accessors[primitive.attributes.at("COLOR_0")];
+				colorBufferView = &gltf.bufferViews[colorAccessor->bufferView];
+				colorBuffer = &gltf.buffers[colorBufferView->buffer];
 
 				int comps = (colorAccessor->type == TINYGLTF_TYPE_VEC3 ? 3 :
 					colorAccessor->type == TINYGLTF_TYPE_VEC4 ? 4 : 0);
@@ -188,12 +222,12 @@ void processNode(tinygltf::Model& gltfModel, tinygltf::Node& node, Node* parent,
 			size_t tanStride = 0;
 
 			if (hasTangents) {
-				tanAccessor = &gltfModel.accessors[primitive.attributes.at("TANGENT")];
+				tanAccessor = &gltf.accessors[primitive.attributes.at("TANGENT")];
 				if (tanAccessor->componentType != TINYGLTF_COMPONENT_TYPE_FLOAT)
 					throw std::runtime_error("TANGENT must be FLOAT");
 
-				tanBufferView = &gltfModel.bufferViews[tanAccessor->bufferView];
-				tanBuffer = &gltfModel.buffers[tanBufferView->buffer];
+				tanBufferView = &gltf.bufferViews[tanAccessor->bufferView];
+				tanBuffer = &gltf.buffers[tanBufferView->buffer];
 				tanStride = tanBufferView->byteStride ?
 					tanBufferView->byteStride :
 					4 * sizeof(float);
@@ -221,7 +255,7 @@ void processNode(tinygltf::Model& gltfModel, tinygltf::Node& node, Node* parent,
 				}
 
 				// TEXCOORD_0
-				if (hasTexCoords) {
+				if (hasTexCoords0) {
 					const unsigned char* base = &uvBuffer->data[
 						uvBufferView->byteOffset +
 							uvAccessor->byteOffset +
@@ -231,12 +265,12 @@ void processNode(tinygltf::Model& gltfModel, tinygltf::Node& node, Node* parent,
 					switch (uvAccessor->componentType) {
 					case TINYGLTF_COMPONENT_TYPE_FLOAT: {
 						const float* uv = reinterpret_cast<const float*>(base);
-						v.texCoord = { uv[0], uv[1] };
+						v.texCoord0 = { uv[0], uv[1] };
 						break;
 					}
 					case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE: {
 						const uint8_t* uv = reinterpret_cast<const uint8_t*>(base);
-						v.texCoord = {
+						v.texCoord0 = {
 							uv[0] / 255.0f,
 							uv[1] / 255.0f
 						};
@@ -244,21 +278,59 @@ void processNode(tinygltf::Model& gltfModel, tinygltf::Node& node, Node* parent,
 					}
 					case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT: {
 						const uint16_t* uv = reinterpret_cast<const uint16_t*>(base);
-						v.texCoord = {
+						v.texCoord0 = {
 							uv[0] / 65535.0f,
 							uv[1] / 65535.0f
 						};
 						break;
 					}
 					default:
-						v.texCoord = { 0.0f, 0.0f }; // should never hit due to earlier check
+						v.texCoord0 = { 0.0f, 0.0f }; // should never hit due to earlier check
 						break;
 					}
 				}
 				else {
-					v.texCoord = { 0.0f, 0.0f };
+					v.texCoord0 = { 0.0f, 0.0f };
 				}
 
+				// TEXCOORD_1
+				if (hasTexCoords1) {
+					const unsigned char* base = &uv1Buffer->data[
+						uv1BufferView->byteOffset +
+							uv1Accessor->byteOffset +
+							i * uv1Stride
+					];
+
+					switch (uv1Accessor->componentType) {
+					case TINYGLTF_COMPONENT_TYPE_FLOAT: {
+						const float* uv = reinterpret_cast<const float*>(base);
+						v.texCoord1 = { uv[0], uv[1] };
+						break;
+					}
+					case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE: {
+						const uint8_t* uv = reinterpret_cast<const uint8_t*>(base);
+						v.texCoord1 = {
+							uv[0] / 255.0f,
+							uv[1] / 255.0f
+						};
+						break;
+					}
+					case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT: {
+						const uint16_t* uv = reinterpret_cast<const uint16_t*>(base);
+						v.texCoord1 = {
+							uv[0] / 65535.0f,
+							uv[1] / 65535.0f
+						};
+						break;
+					}
+					default:
+						v.texCoord1 = { 0.0f, 0.0f }; // should never hit
+						break;
+					}
+				}
+				else {
+					v.texCoord1 = v.texCoord0; // fallback
+				}
 
 				// COLOR_0
 				if (hasColors) {
@@ -314,5 +386,32 @@ void processNode(tinygltf::Model& gltfModel, tinygltf::Node& node, Node* parent,
 	// Recurse
 	// ─────────────────────────────────────────────
 	for (int child : node.children)
-		processNode(gltfModel, gltfModel.nodes[child], newNode, baseDir, model);
+		processNode(gltf, gltf.nodes[child], newNode, baseDir, model);
+}
+
+void parseSceneNodes(
+	const tinygltf::Model& gltf,
+	Model* model,
+	const std::string& baseDir)
+{
+	// glTF may have zero scenes
+	if (gltf.scenes.empty())
+	{
+		// Create an empty root node and bail out
+		return;
+	}
+
+	int sceneIndex = gltf.defaultScene;
+
+	// If defaultScene is invalid, fall back to 0
+	if (sceneIndex < 0 || sceneIndex >= (int)gltf.scenes.size())
+		sceneIndex = 0;
+
+	const tinygltf::Scene& scene = gltf.scenes[sceneIndex];
+
+	for (int nodeIndex : scene.nodes)
+	{
+		const tinygltf::Node& node = gltf.nodes[nodeIndex];
+		processNode(gltf, node, model->rootNode, baseDir, model);
+	}
 }

@@ -8,6 +8,7 @@
 #include "loader/gltf_textures.h"
 #include "loader/gltf_nodes.h"
 #include "loader/gltf_meshes.h"
+#include "loader/gltf_materials.h"
 #include "resources/images.h"
 #include "resources/buffers.h"
 #include "scene/texture.h"
@@ -19,14 +20,30 @@
 #include "core/context.h"
 #include "core/state.h"
 #include <vector>
-
+//Utility
+std::string extractBaseDir(const std::string& path){
+	size_t pos = path.find_last_of("/\\");
+	if (pos == std::string::npos)
+		return "";
+	return path.substr(0, pos + 1);
+}
 //Loading
-void modelLoad(State* state, std::string modelPath)
+void loadModel(State* state, std::string modelPath)
 {
-	// Use tinygltf to load the model instead of tinyobjloader
 	Model* model = new Model{};
-
-	tinygltf::Model    gltfModel;
+	model->rootNode = new Node();
+	model->rootNode->name = "Root";
+	tinygltf::Model gltf = loadGltf(modelPath);
+	std::unordered_map<int, TextureRole> textureRoles;
+	parseMaterials(state, model, gltf, textureRoles);
+	std::string baseDir = extractBaseDir(modelPath);
+	parseSceneNodes(gltf, model, baseDir);
+	createMeshBuffers(state, model->rootNode);
+	createModelTextures(state, model, gltf, textureRoles);
+	state->scene->models.push_back(model);
+};
+tinygltf::Model loadGltf(std::string modelPath) {
+	tinygltf::Model model;
 	tinygltf::TinyGLTF loader;
 	std::string        err;
 	std::string        warn;
@@ -37,10 +54,10 @@ void modelLoad(State* state, std::string modelPath)
 	std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
 
 	if (extension == "glb") {
-		ret = loader.LoadBinaryFromFile(&gltfModel, &err, &warn, modelPath);
+		ret = loader.LoadBinaryFromFile(&model, &err, &warn, modelPath);
 	}
 	else if (extension == "gltf") {
-		ret = loader.LoadASCIIFromFile(&gltfModel, &err, &warn, modelPath);
+		ret = loader.LoadASCIIFromFile(&model, &err, &warn, modelPath);
 	}
 	else {
 		err = "Unsupported file extension: " + extension + ". Expected .gltf or .glb";
@@ -60,183 +77,9 @@ void modelLoad(State* state, std::string modelPath)
 	{
 		throw std::runtime_error("Failed to load glTF model");
 	}
-	model->rootNode = new Node();
-	model->rootNode->name = "Root";
-
-	std::vector<int> textureToImage;
-	textureToImage.reserve(gltfModel.textures.size());
-
-	for (const auto& gltfTex : gltfModel.textures) {
-		textureToImage.push_back(gltfTex.source);
-	}
-
-	std::string baseDir = "";
-	size_t lastSlashPos = modelPath.find_last_of("/\\");
-	if (lastSlashPos != std::string::npos) {
-		baseDir = modelPath.substr(0, lastSlashPos + 1);
-	};
-
-	model->baseMaterialIndex = static_cast<uint32_t>(state->scene->materials.size());
-	model->baseTextureIndex = static_cast<uint32_t>(state->scene->textures.size());
-	state->scene->materials.reserve(gltfModel.materials.size());
-
-	std::unordered_map<int, TextureRole> textureRoles;
-
-	for (const auto& m : gltfModel.materials) {
-		Material* mat = new Material{};
-		// Base color factor
-		if (m.pbrMetallicRoughness.baseColorFactor.size() == 4) {
-			mat->baseColorFactor = glm::vec4(
-				m.pbrMetallicRoughness.baseColorFactor[0],
-				m.pbrMetallicRoughness.baseColorFactor[1],
-				m.pbrMetallicRoughness.baseColorFactor[2],
-				m.pbrMetallicRoughness.baseColorFactor[3]
-			);
-		}
-		// Alpha mode
-		if (m.alphaMode == "MASK")
-			mat->alphaMode = "MASK";
-		else if (m.alphaMode == "BLEND")
-			mat->alphaMode = "BLEND";
-		else
-			mat->alphaMode = "OPAQUE";
-
-		// Alpha cutoff
-		if (m.alphaCutoff > 0.0f)
-			mat->alphaCutoff = (float)m.alphaCutoff;
-
-		// Double-sided
-		mat->doubleSided = m.doubleSided;
-
-		// Base color texture
-		if (m.pbrMetallicRoughness.baseColorTexture.index >= 0) {
-			mat->baseColorTextureIndex =
-				model->baseTextureIndex + m.pbrMetallicRoughness.baseColorTexture.index;
-
-			readTextureTransform(
-				m.pbrMetallicRoughness.baseColorTexture,
-				mat->baseColorTransform
-			);
-
-			textureRoles[mat->baseColorTextureIndex] = TextureRole::BaseColor;
-		}
-
-		// Metallic-roughness texture
-		if (m.pbrMetallicRoughness.metallicRoughnessTexture.index >= 0) {
-			mat->metallicRoughnessTextureIndex =
-				model->baseTextureIndex + m.pbrMetallicRoughness.metallicRoughnessTexture.index;
-
-			readTextureTransform(
-				m.pbrMetallicRoughness.metallicRoughnessTexture,
-				mat->metallicRoughnessTransform
-			);
-
-			textureRoles[mat->metallicRoughnessTextureIndex] = TextureRole::MetallicRoughness;
-		}
-
-		// Normal texture
-		if (m.normalTexture.index >= 0) {
-			mat->normalTextureIndex =
-				model->baseTextureIndex + m.normalTexture.index;
-
-			readTextureTransform(
-				m.normalTexture,
-				mat->normalTransform
-			);
-
-			textureRoles[mat->normalTextureIndex] = TextureRole::Normal;
-		}
-
-		// Occlusion texture
-		if (m.occlusionTexture.index >= 0) {
-			mat->occlusionTextureIndex =
-				model->baseTextureIndex + m.occlusionTexture.index;
-
-			readTextureTransform(
-				m.occlusionTexture,
-				mat->occlusionTransform
-			);
-
-			textureRoles[mat->occlusionTextureIndex] = TextureRole::Occlusion;
-		}
-
-		// Emissive texture
-		if (m.emissiveTexture.index >= 0) {
-			mat->emissiveTextureIndex =
-				model->baseTextureIndex + m.emissiveTexture.index;
-
-			readTextureTransform(
-				m.emissiveTexture,
-				mat->emissiveTransform
-			);
-
-			textureRoles[mat->emissiveTextureIndex] = TextureRole::Emissive;
-		}
-
-
-
-		// Scalars
-		mat->metallicFactor = m.pbrMetallicRoughness.metallicFactor;
-		mat->roughnessFactor = m.pbrMetallicRoughness.roughnessFactor;
-
-		state->scene->materials.push_back(mat);
-	}
-
-
-	const tinygltf::Scene& scene = gltfModel.scenes[gltfModel.defaultScene > -1 ? gltfModel.defaultScene : 0];
-	for (int nodeIndex : scene.nodes) {
-		// Process the node and its children recursively
-		// (Implementation of node processing is omitted for brevity)
-		tinygltf::Node node = gltfModel.nodes[nodeIndex];
-		std::cout << "Loaded node: " << node.name << std::endl;
-		processNode(gltfModel, node, model->rootNode, baseDir, model);
-		gltfModel.nodes[nodeIndex] = node; // Update the node in the model with any changes made during processing
-	}
-
-	createMeshBuffers(state, model->rootNode);
-
-	if (!gltfModel.images.empty()) {
-		for (int i = 0; i < gltfModel.images.size(); i++) {
-			const auto& image = gltfModel.images[i];
-
-			Texture* tex = new Texture{};
-
-			int globalIndex = model->baseTextureIndex + i;
-
-			// Assign role BEFORE creating the texture
-			if (textureRoles.count(globalIndex))
-				tex->role = textureRoles[globalIndex];
-			else
-				tex->role = TextureRole::BaseColor; // safe default
-
-			createTextureFromMemory(
-				state,
-				image.image.data(),
-				image.image.size(),
-				image.width,
-				image.height,
-				image.component,
-				*tex
-			);
-
-			state->scene->textures.push_back(tex);
-		}
-	}
-	else {
-		// Fallback texture
-		Texture* tex = new Texture{};
-		textureImageCreate(state, state->config->KOBOLD_TEXTURE_PATH);
-		textureImageViewCreate(state);
-		textureSamplerCreate(state);
-
-		tex->textureImageView = state->texture->textureImageView;
-		tex->textureSampler = state->texture->textureSampler;
-
-		state->scene->textures.push_back(tex);
-	}
-
-	state->scene->models.push_back(model);
+	return model;
 }
+
 void modelUnload(State* state)
 {
 	// 1. Destroy mesh buffers for every node in every model

@@ -2,17 +2,32 @@
 
 layout(push_constant) uniform PushConstants {
     mat4 nodeMatrix;
-    vec4 baseColorFactor;
+    vec4  baseColorFactor;
     float metallicFactor;
     float roughnessFactor;
+
     int baseColorTextureSet;
     int physicalDescriptorTextureSet;
     int normalTextureSet;
     int occlusionTextureSet;
     int emissiveTextureSet;
+
     float alphaMask;
     float alphaMaskCutoff;
+
+    float transmissionFactor;
+    int   transmissionTextureIndex;
+    int   transmissionTexCoordIndex;
+    int   _padT;
+
+    float thicknessFactor;
+    int   thicknessTextureIndex;
+    int   thicknessTexCoordIndex;
+    vec4  attenuation;
 } pc;
+
+
+
 
 layout(binding = 0) uniform UniformBufferObject {
     mat4 model;
@@ -34,19 +49,21 @@ layout(binding = 0) uniform UniformBufferObject {
 // ─────────────────────────────────────────────
 layout(location = 0) in vec3 inPosition;
 layout(location = 1) in vec3 inColor;
-layout(location = 2) in vec2 inTexCoord;
-layout(location = 3) in vec3 inNormal;
-layout(location = 4) in vec4 inTangent;
+layout(location = 2) in vec2 inTexCoord0;
+layout(location = 3) in vec2 inTexCoord1;
+layout(location = 4) in vec3 inNormal;
+layout(location = 5) in vec4 inTangent;
 
 // ─────────────────────────────────────────────
 // Vertex Outputs
 // ─────────────────────────────────────────────
 layout(location = 0) out vec3 fragColorVS;
-layout(location = 1) out vec2 fragTexCoordVS;
-layout(location = 2) out vec3 fragWorldPos;
-layout(location = 3) out vec3 fragNormal;
-layout(location = 4) out vec3 fragTangent;
-layout(location = 5) out vec3 fragBitangent;
+layout(location = 1) out vec2 fragTexCoordVS0;
+layout(location = 2) out vec2 fragTexCoordVS1;
+layout(location = 3) out vec3 fragWorldPos;
+layout(location = 4) out vec3 fragNormal;
+layout(location = 5) out vec3 fragTangent;
+layout(location = 6) out vec3 fragBitangent;
 
 void main() {
     mat4 modelNode = ubo.model * pc.nodeMatrix;
@@ -65,7 +82,8 @@ void main() {
     fragBitangent = B;
 
     fragColorVS    = inColor;
-    fragTexCoordVS = inTexCoord;
+    fragTexCoordVS0 = inTexCoord0;
+    fragTexCoordVS1 = inTexCoord1;
 
     gl_Position = ubo.proj * ubo.view * worldPos;
 }

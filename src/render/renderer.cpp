@@ -12,15 +12,6 @@ void drawMesh(State* state, VkCommandBuffer cmd, const Mesh* mesh, const glm::ma
 {
 	const Material* mat = state->scene->materials[mesh->materialIndex];
 
-	auto resolveTex = [&](int index) -> const Texture*
-		{
-			if (index >= 0 && index < state->scene->textures.size())
-				return state->scene->textures[index];
-			return state->scene->textures[state->scene->defaultTextureIndex];
-		};
-
-	const Texture* baseTex = resolveTex(mat->baseColorTextureIndex);
-
 	// Bind descriptor set for this material (set = 1)
 	vkCmdBindDescriptorSets(
 		cmd,
@@ -47,6 +38,17 @@ void drawMesh(State* state, VkCommandBuffer cmd, const Mesh* mesh, const glm::ma
 	pcb.emissiveTextureSet = 4;
 	pcb.alphaMask = (mat->alphaMode == "MASK") ? 1.0f : 0.0f;
 	pcb.alphaMaskCutoff = mat->alphaCutoff;
+	pcb.transmissionFactor = mat->transmissionFactor;
+	pcb.transmissionTextureIndex = mat->transmissionTextureIndex;
+	pcb.transmissionTexCoordIndex = mat->transmissionTexCoordIndex;
+	// Volume
+	pcb.thicknessFactor = mat->thicknessFactor;
+	pcb.thicknessTextureIndex = mat->thicknessTextureIndex;
+	pcb.thicknessTexCoordIndex = mat->thicknessTexCoordIndex;
+	pcb.attenuation = mat->attenuationColor;
+	pcb.attenuation.w = mat->attenuationDistance;
+
+
 
 	vkCmdPushConstants(
 		cmd,

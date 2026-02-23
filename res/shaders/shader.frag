@@ -4,7 +4,7 @@
 // Push Constants (glTF material semantics)
 // ─────────────────────────────────────────────
 layout(push_constant) uniform PushConstants {
-    mat4 nodeMatrix;   
+    mat4 nodeMatrix;
     vec4  baseColorFactor;
     float metallicFactor;
     float roughnessFactor;
@@ -15,8 +15,18 @@ layout(push_constant) uniform PushConstants {
     int occlusionTextureSet;
     int emissiveTextureSet;
 
-    float alphaMask;        // 0 = off, 1 = on
-    float alphaMaskCutoff;  // used when alphaMask == 1
+    float alphaMask;
+    float alphaMaskCutoff;
+
+    float transmissionFactor;
+    int   transmissionTextureIndex;
+    int   transmissionTexCoordIndex;
+    int   _padT;
+
+    float thicknessFactor;
+    int   thicknessTextureIndex;
+    int   thicknessTexCoordIndex;
+    vec4  attenuation;
 } pc;
 
 // ─────────────────────────────────────────────
@@ -48,7 +58,7 @@ struct TexTransform {
     vec4 rot_center_tex;
 };
 
-layout(std140, set = 1, binding = 5) uniform MaterialData {
+layout(std140, set = 1, binding = 0) uniform MaterialData {
     TexTransform baseColorTT;
     TexTransform mrTT;
     TexTransform normalTT;
@@ -62,21 +72,25 @@ layout(std140, set = 1, binding = 5) uniform MaterialData {
 // ─────────────────────────────────────────────
 // Material Textures (set = 1)
 // ─────────────────────────────────────────────
-layout(set = 1, binding = 0) uniform sampler2D baseColorTex;
-layout(set = 1, binding = 1) uniform sampler2D metallicRoughnessTex;
-layout(set = 1, binding = 2) uniform sampler2D occlusionTex;
-layout(set = 1, binding = 3) uniform sampler2D emissiveTex;
-layout(set = 1, binding = 4) uniform sampler2D normalTex;
+layout(set = 1, binding = 1) uniform sampler2D baseColorTex;
+layout(set = 1, binding = 2) uniform sampler2D metallicRoughnessTex;
+layout(set = 1, binding = 3) uniform sampler2D occlusionTex;
+layout(set = 1, binding = 4) uniform sampler2D emissiveTex;
+layout(set = 1, binding = 5) uniform sampler2D normalTex;
+layout(set = 1, binding = 6) uniform sampler2D transmissionTex;
+layout(set = 1, binding = 7) uniform sampler2D volumeTex;
+
 
 // ─────────────────────────────────────────────
 // Inputs from vertex shader
 // ─────────────────────────────────────────────
 layout(location = 0) in vec3 fragColorVS;
-layout(location = 1) in vec2 fragTexCoordVS;
-layout(location = 2) in vec3 fragWorldPos;
-layout(location = 3) in vec3 fragNormal;
-layout(location = 4) in vec3 fragTangent;
-layout(location = 5) in vec3 fragBitangent;
+layout(location = 1) in vec2 fragTexCoordVS0;
+layout(location = 2) in vec2 fragTexCoordVS1;
+layout(location = 3) in vec3 fragWorldPos;
+layout(location = 4) in vec3 fragNormal;
+layout(location = 5) in vec3 fragTangent;
+layout(location = 6) in vec3 fragBitangent;
 
 // ─────────────────────────────────────────────
 // Output
@@ -88,8 +102,7 @@ layout(location = 0) out vec4 outColor;
 // ─────────────────────────────────────────────
 vec2 getUV(int setIndex)
 {
-    // Single UV set for now
-    return fragTexCoordVS;
+    return (setIndex == 0) ? fragTexCoordVS0 : fragTexCoordVS1;
 }
 
 vec2 applyTextureTransform(vec2 uv, TexTransform tt)
@@ -115,26 +128,34 @@ vec2 applyTextureTransform(vec2 uv, TexTransform tt)
     return uv;
 }
 
-
 int getTexCoordIndex(TexTransform tt)
 {
-    return int(tt.rot_center_tex.w + 0.5);
+    return int(max(tt.rot_center_tex.w, 0.0) + 0.5);
 }
-
 
 vec3 getNormalFromMap()
 {
+    bool hasNormalTex = (uMat.normalTT.rot_center_tex.w >= 0.0);
+
+    if (!hasNormalTex) {
+        return normalize(fragNormal);
+    }
+
     vec2 uv = getUV(getTexCoordIndex(uMat.normalTT));
     uv = applyTextureTransform(uv, uMat.normalTT);
 
     vec3 tangentNormal = texture(normalTex, uv).xyz * 2.0 - 1.0;
 
-    mat3 TBN = mat3(normalize(fragTangent),
-                    normalize(fragBitangent),
-                    normalize(fragNormal));
+    vec3 N0 = normalize(fragNormal);
+    vec3 T  = normalize(fragTangent);
+    T = normalize(T - N0 * dot(N0, T));
+    vec3 B  = cross(N0, T) * sign(dot(fragBitangent, cross(N0, T)));
 
+    mat3 TBN = mat3(T, B, N0);
     return normalize(TBN * tangentNormal);
 }
+
+
 float DistributionGGX(vec3 N, vec3 H, float roughness)
 {
     float a      = roughness * roughness;
@@ -174,50 +195,126 @@ vec3 FresnelSchlick(float cosTheta, vec3 F0)
     return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
 }
 
+//GLTF extension helpers
+float getTransmission()
+{
+    float t = pc.transmissionFactor;
+
+    if (pc.transmissionTextureIndex >= 0) {
+        // For now we ignore per-texture index and just use a single bound sampler
+        vec2 uv = getUV(pc.transmissionTexCoordIndex);
+        // If you later add a TexTransform for transmission, apply it here
+        // uv = applyTextureTransform(uv, uMat.transmissionTT);
+
+        t *= texture(transmissionTex, uv).r;
+    }
+
+    return clamp(t, 0.0, 1.0);
+}
+
+float getThickness()
+{
+    float thick = pc.thicknessFactor;
+
+    if (pc.thicknessTextureIndex >= 0) {
+        vec2 uv = getUV(pc.thicknessTexCoordIndex);
+        // If you later add a TexTransform for volume, apply it here
+        // uv = applyTextureTransform(uv, uMat.volumeTT);
+        thick *= texture(volumeTex, uv).r;
+    }
+
+    return thick;
+}
+
+vec3 applyVolume(vec3 color)
+{
+    float thick = getThickness();
+
+    // attenuationDistance <= 0 → treat as no attenuation
+    if (pc.attenuation.w <= 0.0)
+        return color;
+
+    vec3 att = exp(-pc.attenuation.xyz * thick / pc.attenuation.w);
+    return color * att;
+}
+
+
+
 // ─────────────────────────────────────────────
 // Main
 // ─────────────────────────────────────────────
 void main()
 {
-    // Base color
-    vec2 uvBase = getUV(getTexCoordIndex(uMat.baseColorTT));
-    uvBase = applyTextureTransform(uvBase, uMat.baseColorTT);
-    vec4 baseSample = texture(baseColorTex, uvBase);
-    vec4 baseColor  = baseSample * pc.baseColorFactor;
+    // Base color (optional)
+    bool hasBaseColorTex = (uMat.baseColorTT.rot_center_tex.w >= 0.0);
 
-    // Alpha mask (glTF MASK mode)
+    vec4 baseColor;
+    if (hasBaseColorTex) {
+        vec2 uvBase = getUV(getTexCoordIndex(uMat.baseColorTT));
+        uvBase = applyTextureTransform(uvBase, uMat.baseColorTT);
+        vec4 baseSample = texture(baseColorTex, uvBase);
+        baseColor = baseSample * pc.baseColorFactor;
+    } else {
+        baseColor = pc.baseColorFactor;
+    }
+
+    // Alpha mask
     if (pc.alphaMask > 0.5) {
         if (baseColor.a < pc.alphaMaskCutoff) {
             discard;
         }
     }
 
-    // Metallic-Roughness
-    vec2 uvMR = getUV(getTexCoordIndex(uMat.mrTT));
-    uvMR = applyTextureTransform(uvMR, uMat.mrTT);
-    vec3 mrSample = texture(metallicRoughnessTex, uvMR).rgb;
-    float metallic  = clamp(mrSample.b * pc.metallicFactor, 0.0, 1.0);
-    float roughness = clamp(mrSample.g * pc.roughnessFactor, 0.04, 1.0);
+    // Metallic-Roughness (optional)
+    bool hasMRTex = (uMat.mrTT.rot_center_tex.w >= 0.0);
 
-    // Occlusion
-    vec2 uvOcc = getUV(getTexCoordIndex(uMat.occlusionTT));
-    uvOcc = applyTextureTransform(uvOcc, uMat.occlusionTT);
-    float occlusion = texture(occlusionTex, uvOcc).r;
+    float metallic;
+    float roughness;
 
-    // Emissive
-    vec2 uvEm = getUV(getTexCoordIndex(uMat.emissiveTT));
-    uvEm = applyTextureTransform(uvEm, uMat.emissiveTT);
-    vec3 emissive = texture(emissiveTex, uvEm).rgb;
+    if (hasMRTex) {
+        vec2 uvMR = getUV(getTexCoordIndex(uMat.mrTT));
+        uvMR = applyTextureTransform(uvMR, uMat.mrTT);
+        vec3 mrSample = texture(metallicRoughnessTex, uvMR).rgb;
+        metallic  = clamp(mrSample.b * pc.metallicFactor, 0.0, 1.0);
+        roughness = clamp(mrSample.g * pc.roughnessFactor, 0.04, 1.0);
+    } else {
+        metallic  = clamp(pc.metallicFactor, 0.0, 1.0);
+        roughness = clamp(pc.roughnessFactor, 0.04, 1.0);
+    }
 
-    // Normal (tangent-space normal map → world space)
+    // Occlusion (optional)
+    bool hasOccTex = (uMat.occlusionTT.rot_center_tex.w >= 0.0);
+
+    float occlusion;
+    if (hasOccTex) {
+        vec2 uvOcc = getUV(getTexCoordIndex(uMat.occlusionTT));
+        uvOcc = applyTextureTransform(uvOcc, uMat.occlusionTT);
+        occlusion = texture(occlusionTex, uvOcc).r;
+    } else {
+        occlusion = 1.0;
+    }
+
+    // Emissive (optional)
+    bool hasEmissiveTex = (uMat.emissiveTT.rot_center_tex.w >= 0.0);
+
+    vec3 emissive;
+    if (hasEmissiveTex) {
+        vec2 uvEm = getUV(getTexCoordIndex(uMat.emissiveTT));
+        uvEm = applyTextureTransform(uvEm, uMat.emissiveTT);
+        emissive = texture(emissiveTex, uvEm).rgb;
+    } else {
+        emissive = vec3(0.0);
+    }
+
+    // Normal (optional via getNormalFromMap)
     vec3 N = getNormalFromMap();
     vec3 V = normalize(ubo.camPos.xyz - fragWorldPos);
 
     // Base reflectance
-    vec3 albedo = pow(baseColor.rgb * fragColorVS, vec3(2.2)); // sRGB → linear
+    vec3 albedo = pow(baseColor.rgb * fragColorVS, vec3(2.2));
     vec3 F0 = mix(vec3(0.04), albedo, metallic);
 
-    // Direct lighting (punctual lights)
+    // Direct lighting
     vec3 Lo = vec3(0.0);
     for (int i = 0; i < 4; ++i) {
         vec3 Lpos = ubo.lightPositions[i].xyz;
@@ -231,10 +328,10 @@ void main()
         L = normalize(L);
         vec3 H = normalize(V + L);
 
-        float attenuation = 1.0 / max(dist * dist, 1e-4);
+        float scalerAttenuation = 1.0 / max(dist * dist, 1e-4);
         if (radius > 0.0) {
             float falloff = clamp(1.0 - dist / radius, 0.0, 1.0);
-            attenuation *= falloff * falloff;
+            scalerAttenuation *= falloff * falloff;
         }
 
         float NDF = DistributionGGX(N, H, roughness);
@@ -249,23 +346,22 @@ void main()
         vec3 kD = (vec3(1.0) - kS) * (1.0 - metallic);
 
         float NdotL = max(dot(N, L), 0.0);
-        vec3  radiance = Lcolor * attenuation;
+        vec3  radiance = Lcolor * scalerAttenuation;
 
         Lo += (kD * albedo / 3.14159265 + specular) * radiance * NdotL;
     }
 
-    // Simple ambient term (no IBL yet)
     vec3 ambient = albedo * 0.03 * occlusion;
+    vec3 colorOpaque = ambient + Lo + emissive;
 
-    vec3 color = ambient + Lo + emissive;
+    float transmission = getTransmission();
+    vec3 transmittedColor = baseColor.rgb;
+    vec3 color = mix(colorOpaque, transmittedColor, transmission);
 
-    // Tone mapping + gamma
-    
+    color = applyVolume(color);
     color = vec3(1.0) - exp(-color * ubo.exposure);
     color = pow(color, vec3(1.0 / ubo.gamma));
-    
 
-    outColor = vec4(color, baseColor.a);
+    float alpha = mix(baseColor.a, 1.0, transmission);
+    outColor = vec4(color, alpha);
 }
-
-

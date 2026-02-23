@@ -68,137 +68,122 @@ void commandBufferGet(State* state) {
 
 void commandBufferRecord(State* state)
 {
-	VkCommandBuffer cmd = state->buffers->commandBuffer[state->renderer->frameIndex];
+    VkCommandBuffer cmd = state->buffers->commandBuffer[state->renderer->frameIndex];
 
-	VkCommandBufferBeginInfo beginInfo{
-		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-	};
-	vkBeginCommandBuffer(cmd, &beginInfo);
+    VkCommandBufferBeginInfo beginInfo{
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+    };
+    vkBeginCommandBuffer(cmd, &beginInfo);
 
-	std::array<VkClearValue, 2> clearValues{};
-	clearValues[0].color = { state->config->backgroundColor.color };
-	clearValues[1].depthStencil = { 1.0f, 0 };
+    std::array<VkClearValue, 2> clearValues{};
+    clearValues[0].color = { state->config->backgroundColor.color };
+    clearValues[1].depthStencil = { 1.0f, 0 };
 
-	VkRenderPassBeginInfo renderPassInfo{
-		.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-		.renderPass = state->renderer->renderPass,
-		.framebuffer = state->buffers->framebuffers[state->renderer->imageAquiredIndex],
-		.clearValueCount = static_cast<uint32_t>(clearValues.size()),
-		.pClearValues = clearValues.data(),
-	};
-	renderPassInfo.renderArea = {
-		.offset = { 0, 0 },
-		.extent = state->window.swapchain.imageExtent
-	};
+    VkRenderPassBeginInfo renderPassInfo{
+        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+        .renderPass = state->renderer->renderPass,
+        .framebuffer = state->buffers->framebuffers[state->renderer->imageAquiredIndex],
+        .clearValueCount = static_cast<uint32_t>(clearValues.size()),
+        .pClearValues = clearValues.data(),
+    };
+    renderPassInfo.renderArea = {
+        .offset = { 0, 0 },
+        .extent = state->window.swapchain.imageExtent
+    };
 
-	vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+    vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-	VkViewport viewport{
-		.x = 0.0f,
-		.y = 0.0f,
-		.width = (float)state->window.swapchain.imageExtent.width,
-		.height = (float)state->window.swapchain.imageExtent.height,
-		.minDepth = 0.0f,
-		.maxDepth = 1.0f,
-	};
-	vkCmdSetViewport(cmd, 0, 1, &viewport);
+    VkViewport viewport{
+        .x = 0.0f,
+        .y = 0.0f,
+        .width = (float)state->window.swapchain.imageExtent.width,
+        .height = (float)state->window.swapchain.imageExtent.height,
+        .minDepth = 0.0f,
+        .maxDepth = 1.0f,
+    };
+    vkCmdSetViewport(cmd, 0, 1, &viewport);
 
-	VkRect2D scissor{
-		.offset = { 0, 0 },
-		.extent = state->window.swapchain.imageExtent,
-	};
-	vkCmdSetScissor(cmd, 0, 1, &scissor);
+    VkRect2D scissor{
+        .offset = { 0, 0 },
+        .extent = state->window.swapchain.imageExtent,
+    };
+    vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-	// Bind global UBO (set = 0)
-	vkCmdBindDescriptorSets(
-		cmd,
-		VK_PIPELINE_BIND_POINT_GRAPHICS,
-		state->renderer->pipelineLayout,
-		0,
-		1,
-		&state->renderer->descriptorSets[state->renderer->frameIndex],
-		0,
-		nullptr
-	);
+    // Bind global UBO (set = 0)
+    vkCmdBindDescriptorSets(
+        cmd,
+        VK_PIPELINE_BIND_POINT_GRAPHICS,
+        state->renderer->pipelineLayout,
+        0,
+        1,
+        &state->renderer->descriptorSets[state->renderer->frameIndex],
+        0,
+        nullptr
+    );
 
-	// ─────────────────────────────────────────────
-	// Per-model loop
-	// ─────────────────────────────────────────────
-	for (Model* model : state->scene->models)
-	{
-		// 1. Update UBO with per-model transform
-		UniformBufferObject ubo =
-			*reinterpret_cast<UniformBufferObject*>(
-				state->renderer->uniformBuffersMapped[state->renderer->frameIndex]
-				);
+    // ─────────────────────────────────────────────
+    // Per-model loop
+    // ─────────────────────────────────────────────
+    for (Model* model : state->scene->models)
+    {
+        // 2. Gather draw items for THIS model
+        std::vector<DrawItem> items;
+        gatherDrawItems(
+            model->rootNode,
+            state->scene->camera->getPosition(),
+            state->scene->materials,
+            items
+        );
 
-		ubo.model = model->transform;   // per-model matrix
+        // 3. Split opaque / transparent (local vectors)
+        std::vector<DrawItem> opaqueItems;
+        std::vector<DrawItem> transparentItems;
 
-		memcpy(
-			state->renderer->uniformBuffersMapped[state->renderer->frameIndex],
-			&ubo,
-			sizeof(UniformBufferObject)
-		);
+        for (const DrawItem& item : items) {            
+            if (item.transparent)
+                transparentItems.push_back(item);
+            else
+                opaqueItems.push_back(item);
+        }
 
-		// 2. Gather draw items for THIS model
-		std::vector<DrawItem> items;
-		gatherDrawItems(
-			model->rootNode,
-			state->scene->camera->getPosition(),
-			state->scene->materials,
-			items
-		);
+        // 4. Draw opaque with main pipeline
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, state->renderer->graphicsPipeline);
+        for (const DrawItem& item : opaqueItems) {
+            drawMesh(
+                state,
+                cmd,
+                item.mesh,
+                item.node->getGlobalMatrix(),
+                model->transform
+            );
+        }
 
-		// 3. Split opaque / transparent (local vectors)
-		std::vector<DrawItem> opaqueItems;
-		std::vector<DrawItem> transparentItems;
+        // 5. Sort transparent back-to-front
+        std::sort(
+            transparentItems.begin(), transparentItems.end(),
+            [](const DrawItem& a, const DrawItem& b) {
+                return a.distanceToCamera > b.distanceToCamera;
+            }
+        );
 
-		for (const DrawItem& item : items) {
-			if (item.transparent)
-				transparentItems.push_back(item);
-			else
-				opaqueItems.push_back(item);
-		}
+        // 6. Draw transparent with transparency pipeline
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, state->renderer->transparencyPipeline);
+        for (const DrawItem& item : transparentItems) {
+            drawMesh(
+                state,
+                cmd,
+                item.mesh,
+                item.node->getGlobalMatrix(),
+                model->transform
+            );
+        }
+    }
 
-		// 4. Draw opaque with main pipeline
-		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, state->renderer->graphicsPipeline);
-		for (const DrawItem& item : opaqueItems) {
-			glm::mat4 nodeMatrix = item.node->getGlobalMatrix();
-			drawMesh(
-				state,
-				cmd,
-				item.mesh,
-				item.node->getGlobalMatrix(),
-				model->transform
-			);
-		};
+    vkCmdEndRenderPass(cmd);
 
-		// 5. Sort transparent back-to-front
-		std::sort(
-			transparentItems.begin(), transparentItems.end(),
-			[](const DrawItem& a, const DrawItem& b) {
-				return a.distanceToCamera > b.distanceToCamera;
-			}
-		);
+    guiDraw(state, cmd);
 
-		// 6. Draw transparent with transparency pipeline
-		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, state->renderer->transparencyPipeline);
-		for (const DrawItem& item : transparentItems) {
-			glm::mat4 nodeMatrix = item.node->getGlobalMatrix();
-			drawMesh(
-				state,
-				cmd,
-				item.mesh,
-				item.node->getGlobalMatrix(),
-				model->transform
-			);
-		}
-	}
-
-	vkCmdEndRenderPass(cmd);
-
-	guiDraw(state, cmd);
-
-	PANIC(vkEndCommandBuffer(cmd), "Failed To Record Command Buffer");
+    PANIC(vkEndCommandBuffer(cmd), "Failed To Record Command Buffer");
 }
+
 

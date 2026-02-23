@@ -144,6 +144,10 @@
     <ClCompile Include="src\gui\imgui\imgui_impl_vulkan.cpp" />
     <ClCompile Include="src\gui\imgui\imgui_tables.cpp" />
     <ClCompile Include="src\gui\imgui\imgui_widgets.cpp" />
+    <ClCompile Include="src\loader\gltf_extensions.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
+      <DeploymentContent Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</DeploymentContent>
+    </ClCompile>
     <ClCompile Include="src\loader\gltf_loader.cpp" />
     <ClCompile Include="src\loader\gltf_materials.cpp" />
     <ClCompile Include="src\loader\gltf_meshes.cpp" />
@@ -160,7 +164,6 @@
     <ClCompile Include="src\render\sync_objects.cpp" />
     <ClCompile Include="src\resources\buffers.cpp" />
     <ClCompile Include="src\resources\images.cpp" />
-    <ClCompile Include="src\resources\textures.cpp" />
     <ClCompile Include="src\scene\animation.cpp" />
     <ClCompile Include="src\scene\gather.cpp" />
     <ClCompile Include="src\scene\materials.cpp" />
@@ -188,6 +191,7 @@
     <ClInclude Include="src\gui\imgui\imstb_rectpack.h" />
     <ClInclude Include="src\gui\imgui\imstb_textedit.h" />
     <ClInclude Include="src\gui\imgui\imstb_truetype.h" />
+    <ClInclude Include="src\loader\gltf_extensions.h" />
     <ClInclude Include="src\loader\gltf_loader.h" />
     <ClInclude Include="src\loader\gltf_materials.h" />
     <ClInclude Include="src\loader\gltf_meshes.h" />
@@ -204,7 +208,6 @@
     <ClInclude Include="src\render\sync_objects.h" />
     <ClInclude Include="src\resources\buffers.h" />
     <ClInclude Include="src\resources\images.h" />
-    <ClInclude Include="src\resources\textures.h" />
     <ClInclude Include="src\scene\animation.h" />
     <ClInclude Include="src\scene\camera.h" />
     <ClInclude Include="src\scene\gather.h" />

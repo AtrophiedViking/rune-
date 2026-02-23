@@ -35,17 +35,18 @@ void createGlobalSetLayout(State* state) {
 
 // set 1: texture (for now, just baseColor at binding 0)
 void createTextureSetLayout(State* state) {
-	std::array<VkDescriptorSetLayoutBinding, 6> bindings{};
+	std::array<VkDescriptorSetLayoutBinding, 8> bindings{};
 
-	// binding 0 — baseColor texture
+	
+	// 0 — material UBO
 	bindings[0] = {
 		.binding = 0,
-		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
 		.descriptorCount = 1,
 		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
 	};
 
-	// binding 1 — metallicRoughness texture
+	// 1 — baseColor
 	bindings[1] = {
 		.binding = 1,
 		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -53,7 +54,7 @@ void createTextureSetLayout(State* state) {
 		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
 	};
 
-	// binding 2 — occlusion texture
+	// 1 — metallicRoughness
 	bindings[2] = {
 		.binding = 2,
 		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -61,7 +62,7 @@ void createTextureSetLayout(State* state) {
 		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
 	};
 
-	// binding 3 — emissive texture
+	// 2 — occlusion
 	bindings[3] = {
 		.binding = 3,
 		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -69,7 +70,7 @@ void createTextureSetLayout(State* state) {
 		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
 	};
 
-	// binding 4 — normal texture
+	// 3 — emissive
 	bindings[4] = {
 		.binding = 4,
 		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -77,10 +78,27 @@ void createTextureSetLayout(State* state) {
 		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
 	};
 
-	// binding 5 — NEW: material UBO (TextureTransforms)
+	// 4 — normal
 	bindings[5] = {
 		.binding = 5,
-		.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
+	};
+
+
+	// 6 — transmission texture
+	bindings[6] = {
+		.binding = 6,
+		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
+	};
+
+	// 7 — volume texture
+	bindings[7] = {
+		.binding = 7,
+		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 		.descriptorCount = 1,
 		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
 	};
@@ -91,8 +109,16 @@ void createTextureSetLayout(State* state) {
 		.pBindings = bindings.data()
 	};
 
-	PANIC(vkCreateDescriptorSetLayout(state->context->device, &layoutInfo, nullptr, &state->renderer->textureSetLayout), "Failed to create texture set layout");
+	PANIC(
+		vkCreateDescriptorSetLayout(
+			state->context->device,
+			&layoutInfo,
+			nullptr,
+			&state->renderer->textureSetLayout),
+		"Failed to create texture set layout"
+	);
 }
+
 void descriptorSetLayoutDestroy(State* state) {
 	vkDestroyDescriptorSetLayout(state->context->device, state->renderer->descriptorSetLayout, nullptr);
 	vkDestroyDescriptorSetLayout(state->context->device, state->renderer->textureSetLayout, nullptr);
@@ -235,14 +261,12 @@ void createMaterialDescriptorSets(State* state)
 		};
 
 		VkResult result = allocateDescriptorSetsWithResize(state, &allocInfo, &mat->descriptorSet);
-
 		PANIC(result, "Failed to allocate material descriptor set");
 
-
-		auto resolveTex = [&](int index) -> const Texture&
-			{
-				if (index >= 0 && index < state->scene->textures.size())
-					return *state->scene->textures[index];
+		auto resolveTex = [&](int index) -> const Texture& {
+			if (index >= 0 && index < (int)state->scene->textures.size()) {
+				return *state->scene->textures[index];
+			}
 				return *state->scene->textures[state->scene->defaultTextureIndex];
 			};
 
@@ -251,8 +275,11 @@ void createMaterialDescriptorSets(State* state)
 		const Texture& occTex = resolveTex(mat->occlusionTextureIndex);
 		const Texture& emisTex = resolveTex(mat->emissiveTextureIndex);
 		const Texture& normTex = resolveTex(mat->normalTextureIndex);
+		const Texture& transTex = resolveTex(mat->transmissionTextureIndex);
+		const Texture& thickTex = resolveTex(mat->thicknessTextureIndex);
 
-		// Create/fill MaterialGPU
+
+		// MaterialGPU UBO
 		MaterialGPU gpu{};
 		gpu.baseColorTT = toGPU(mat->baseColorTransform);
 		gpu.mrTT = toGPU(mat->metallicRoughnessTransform);
@@ -260,10 +287,24 @@ void createMaterialDescriptorSets(State* state)
 		gpu.occlusionTT = toGPU(mat->occlusionTransform);
 		gpu.emissiveTT = toGPU(mat->emissiveTransform);
 
-		// Create a small uniform buffer for this material (you already have helpers for UBOs)
-		createBufferForMaterial(state, sizeof(MaterialGPU),
+		// UV set indices (0 or 1)
+		gpu.baseColorTT.rot_center_tex.w = static_cast<float>(mat->baseColorTexCoordIndex);
+		gpu.mrTT.rot_center_tex.w = static_cast<float>(mat->metallicRoughnessTexCoordIndex);
+		gpu.normalTT.rot_center_tex.w = static_cast<float>(mat->normalTexCoordIndex);
+		gpu.occlusionTT.rot_center_tex.w = static_cast<float>(mat->occlusionTexCoordIndex);
+		gpu.emissiveTT.rot_center_tex.w = static_cast<float>(mat->emissiveTexCoordIndex);
+
+		gpu.thicknessFactor = mat->thicknessFactor;
+		gpu.attenuationDistance = mat->attenuationDistance;
+		gpu.attenuationColor = mat->attenuationColor;
+
+		createBufferForMaterial(
+			state,
+			sizeof(MaterialGPU),
 			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-			&mat->materialBuffer, &mat->materialMemory);
+			&mat->materialBuffer,
+			&mat->materialMemory
+		);
 
 		void* data = nullptr;
 		vkMapMemory(state->context->device, mat->materialMemory, 0, sizeof(MaterialGPU), 0, &data);
@@ -276,43 +317,52 @@ void createMaterialDescriptorSets(State* state)
 			.range = sizeof(MaterialGPU)
 		};
 
+		// 6 textures (0–4 existing, 6 = transmission)
+		std::array<VkDescriptorImageInfo, 7> infos{
+			VkDescriptorImageInfo{ baseTex.textureSampler,  baseTex.textureImageView,  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }, // 0
+			VkDescriptorImageInfo{ mrTex.textureSampler,    mrTex.textureImageView,    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }, // 1
+			VkDescriptorImageInfo{ occTex.textureSampler,   occTex.textureImageView,   VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }, // 2
+			VkDescriptorImageInfo{ emisTex.textureSampler,  emisTex.textureImageView,  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }, // 3
+			VkDescriptorImageInfo{ normTex.textureSampler,  normTex.textureImageView,  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }, // 4
+			VkDescriptorImageInfo{ transTex.textureSampler, transTex.textureImageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }, // 5
+			VkDescriptorImageInfo{ thickTex.textureSampler, thickTex.textureImageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }, // 6
 
-		std::array<VkDescriptorImageInfo, 5> infos{
-			VkDescriptorImageInfo{ baseTex.textureSampler, baseTex.textureImageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }, // binding 0
-			VkDescriptorImageInfo{ mrTex.textureSampler,   mrTex.textureImageView,   VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }, // binding 1
-			VkDescriptorImageInfo{ occTex.textureSampler,  occTex.textureImageView,  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }, // binding 2
-			VkDescriptorImageInfo{ emisTex.textureSampler, emisTex.textureImageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }, // binding 3
-			VkDescriptorImageInfo{ normTex.textureSampler, normTex.textureImageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }  // binding 4
 		};
 
-		std::array<VkWriteDescriptorSet, 6> writes{};
-		for (uint32_t i = 0; i < 5; ++i) {
+		// 7 writes: 0–4 textures, 5 UBO, 6 transmission
+		std::array<VkWriteDescriptorSet, 8> writes{};
+
+		// binding 5: material UBO
+		writes[0] = {
+			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			.dstSet = mat->descriptorSet,
+			.dstBinding = 0,
+			.descriptorCount = 1,
+			.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+			.pBufferInfo = &materialBufInfo
+		};
+
+		// bindings 0–4: existing textures
+		for (uint32_t i = 1; i <= 7; ++i) {
 			writes[i] = {
 				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 				.dstSet = mat->descriptorSet,
 				.dstBinding = i,
 				.descriptorCount = 1,
 				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-				.pImageInfo = &infos[i]
+				.pImageInfo = &infos[i-1]
 			};
 		}
 
-		// binding 5: material UBO
-		writes[5] = {
-			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-			.dstSet = mat->descriptorSet,
-			.dstBinding = 5,
-			.descriptorCount = 1,
-			.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-			.pBufferInfo = &materialBufInfo
-		};
-
-		vkUpdateDescriptorSets(state->context->device,
-			static_cast<uint32_t>(writes.size()), writes.data(),
-			0, nullptr);
+		vkUpdateDescriptorSets(
+			state->context->device,
+			static_cast<uint32_t>(writes.size()),
+			writes.data(),
+			0, nullptr
+		);
 	}
-
 }
+
 void uniformBuffersCreate(State* state) {
 	// One global UBO per frame in flight
 	state->renderer->uniformBuffers.resize(state->config->swapchainBuffering);
@@ -385,7 +435,7 @@ void uniformBuffersUpdate(State* state) {
 
 	// PBR params
 	ubo.exposure = 1.0f;
-	ubo.gamma = 1.5f;
+	ubo.gamma = 1.0f;
 	ubo.prefilteredCubeMipLevels = 1.0f;
 	ubo.scaleIBLAmbient = 1.0f;
 

@@ -1,4 +1,3 @@
-#include "vulkan/vulkan.h"
 #include "loader/gltf_meshes.h"
 #include "resources/buffers.h"
 #include "scene/node.h"

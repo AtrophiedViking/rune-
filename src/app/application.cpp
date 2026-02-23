@@ -28,6 +28,7 @@ void init(State *state) {
 	state->gui = new Gui{};
 	state->scene = new Scene{};
 	state->scene->camera = new Camera{};
+
 	windowCreate(state);
 	deviceCreate(state);
 
@@ -58,27 +59,28 @@ void init(State *state) {
 	callbackSetup(state);
 
 	// Load model + textures BEFORE descriptor sets
-	modelLoad(state, state->config->KOBOLD_MODEL_PATH);
-	modelLoad(state, state->config->HOVER_BIKE_MODEL_PATH);
-	modelLoad(state, state->config->MODEL_PATH);
 
 
+	loadModel(state, state->config->KOBOLD_MODEL_PATH);
 	state->scene->models[0]->setTransform(
 		{ 0.0f, 0.0f, 0.0f },   // position
 		{ 0.0f, 0.0f, 0.0f },    // rotation
 		{ 1.0f, 1.0f, 1.0f }     // scale
 	);
-
+	loadModel(state, state->config->MODEL_PATH);
 	state->scene->models[1]->setTransform(
-		{ -1.0f, 0.0f, 0.0f },
+		{ 0.5f, 0.5f, 0.0f },
 		{ 0.0f, 0.0f, 0.0f },
-		{ 0.003f, 0.003f, 0.003f }
+		{ 10.0f, 10.0f, 10.0f }
 	);
+
+	loadModel(state, state->config->HOVER_BIKE_MODEL_PATH);
 	state->scene->models[2]->setTransform(
-		{ 2.0f, 0.0f, 0.0f },
-		{ 0.0f, 0.0f, 0.0f },
+		{ 0.0f, -1.0f, 0.0f },
+		{ 0.0f, 0.0f, -90.0f },
 		{ 1.0f, 1.0f, 1.0f }
 	);
+
 
 	uniformBuffersCreate(state);
 

@@ -15,6 +15,11 @@ struct MaterialGPU {
 	TexTransformGPU normalTT;
 	TexTransformGPU occlusionTT;
 	TexTransformGPU emissiveTT;
+
+	// Transmission + Volume
+	float thicknessFactor;
+	float attenuationDistance;
+	glm::vec4 attenuationColor;
 };
 
 TexTransformGPU toGPU(const TextureTransform t);

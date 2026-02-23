@@ -2,7 +2,7 @@
 #include "core/math.h"
 
 
-enum struct CameraMovement {
+enum CameraMovement {
 	FORWARD,
 	BACKWARD,
 	LEFT,
@@ -18,7 +18,7 @@ struct Camera {
 	glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);        // Y-axis as world up
 	float yaw = 90.0f;                                 // Look along negative Z-axis (OpenGL convention)
 	float pitch = 0.0f;
-	float zoom = (100.0f);
+	float zoom = (85.0f);
 
 	float movementSpeed = 1;
 	float mouseSensitivity = 0.1f;
@@ -38,8 +38,8 @@ struct Camera {
 		up = glm::normalize(glm::cross(right, front));
 	}
 	glm::mat4 getViewMatrix() const {
-		return glm::lookAt(position - front, position, up);
-	};
+		return glm::lookAt(position, position + front, up);
+	}
 	glm::mat4 getProjectionMatrix(float aspectRatio, float nearPlane, float farPlane) const {
 		return glm::perspective(glm::radians(zoom), aspectRatio, nearPlane, farPlane);
 	};

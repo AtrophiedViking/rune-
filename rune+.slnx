@@ -1,7 +1,0 @@
-<Solution>
-  <Configurations>
-    <Platform Name="x64" />
-    <Platform Name="x86" />
-  </Configurations>
-  <Project Path="rune++.vcxproj" Id="ee12dbec-9b52-43f0-aa53-7fe3aa6dde90" />
-</Solution>

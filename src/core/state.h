@@ -31,25 +31,41 @@ struct UniformBufferObject {
 	glm::vec4 lightColors[4];
 	glm::vec4 camPos;
 
-	float exposure = 2.2f;
+	float exposure = 1.0f;
 	float gamma = 1.0f;
 	float prefilteredCubeMipLevels = 1.0f;
 	float scaleIBLAmbient = 1.0f;
 };
 //push constants
-struct PushConstantBlock {
-	glm::mat4 nodeMatrix;
-	glm::vec4 baseColorFactor;
-	float metallicFactor;
-	float roughnessFactor;
-	int baseColorTextureSet;
-	int physicalDescriptorTextureSet;
-	int normalTextureSet;
-	int occlusionTextureSet;
-	int emissiveTextureSet;
-	float alphaMask;
-	float alphaMaskCutoff;
+
+struct PushConstantBlock
+{
+	glm::mat4 nodeMatrix;            // 64
+	glm::vec4 baseColorFactor;       // 16
+
+	float metallicFactor;            // 4
+	float roughnessFactor;           // 4
+	int   baseColorTextureSet;       // 4
+	int   physicalDescriptorTextureSet; // 4
+
+	int   normalTextureSet;          // 4
+	int   occlusionTextureSet;       // 4
+	int   emissiveTextureSet;        // 4
+	float alphaMask;                 // 4
+
+	float alphaMaskCutoff;           // 4
+	float transmissionFactor;        // 4
+	int   transmissionTextureIndex;  // 4
+	int   transmissionTexCoordIndex; // 4
+
+	int   _padT;                     // 4
+
+	float thicknessFactor;           // 4
+	int   thicknessTextureIndex;     // 4
+	int   thicknessTexCoordIndex;    // 4
+	glm::vec4 attenuation;      // replaces vec3 + pad
 };
+
 
 struct Swapchain{
 	VkSwapchainKHR handle;

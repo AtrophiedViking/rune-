@@ -19,13 +19,22 @@ void gatherDrawItems(const Node* root, const glm::vec3& camPos, const std::vecto
 			if (mesh->materialIndex >= 0 && mesh->materialIndex < (int)materials.size()) {
 				const auto& mat = materials[mesh->materialIndex];
 
+				// Alpha-based transparency
 				if (mat->alphaMode == "BLEND")
 					isTransparent = true;
 				else if (mat->alphaMode == "MASK")
-					isTransparent = false; // still opaque, but alpha-tested
+					isTransparent = false; // alpha test, still opaque
 				else if (mat->baseColorFactor.a < 1.0f)
 					isTransparent = true;
-			};
+
+				// Transmission-based transparency (KHR_materials_transmission)
+				bool isTransmissive =
+					(mat->transmissionFactor > 0.0f) ||
+					(mat->transmissionTextureIndex >= 0);
+
+				if (isTransmissive)
+					isTransparent = true;
+			}
 
 			out.push_back({
 				.node = node,

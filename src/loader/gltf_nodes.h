@@ -1,4 +1,5 @@
 #pragma once
+#include "vulkan/vulkan.h"
 #include <string>
 
 namespace tinygltf{
@@ -10,4 +11,5 @@ struct Node;
 struct Model;
 
 
-void processNode(tinygltf::Model& gltfModel, tinygltf::Node& node, Node* parent, const std::string& baseDir, Model* model);
+void processNode(const tinygltf::Model& gltf, const tinygltf::Node& node, Node* parent, const std::string& baseDir, Model* model);
+void parseSceneNodes(const tinygltf::Model& gltf, Model* model, const std::string& baseDir);

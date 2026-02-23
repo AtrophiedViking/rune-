@@ -2,20 +2,23 @@
 #include <vulkan/vulkan.h>
 #include <ktx.h>
 #include <ktxvulkan.h>
+#include <tiny_gltf.h>
 #include "gltf_textures.h"
-#include "tiny_gltf.h"
 #include "resources/images.h"
 #include "resources/buffers.h"
 #include "render/renderer.h"
 #include "render/command_buffers.h"
+
+#include "loader/gltf_materials.h"
 #include "scene/texture.h"
+#include "scene/model.h"
 #include "scene/scene.h"
 #include "core/context.h"
+#include "core/config.h"
 #include "core/state.h"
+
 // Base type
-void readTextureTransform(
-    const tinygltf::TextureInfo& info,
-    TextureTransform& out)
+void readTextureTransform(const tinygltf::TextureInfo& info, TextureTransform& out)
 {
     out.texCoord = info.texCoord;
 
@@ -45,9 +48,7 @@ void readTextureTransform(
 }
 
 // NormalTextureInfo overload
-void readTextureTransform(
-    const tinygltf::NormalTextureInfo& info,
-    TextureTransform& out)
+void readTextureTransform(const tinygltf::NormalTextureInfo& info, TextureTransform& out)
 {
     // NormalTextureInfo has .texCoord too
     out.texCoord = info.texCoord;
@@ -78,9 +79,7 @@ void readTextureTransform(
 }
 
 // OcclusionTextureInfo overload
-void readTextureTransform(
-    const tinygltf::OcclusionTextureInfo& info,
-    TextureTransform& out)
+void readTextureTransform(const tinygltf::OcclusionTextureInfo& info, TextureTransform& out)
 {
     out.texCoord = info.texCoord;
 
@@ -108,6 +107,40 @@ void readTextureTransform(
         out.texCoord = int(ext.Get("texCoord").GetNumberAsInt());
     }
 }
+
+// Overload for extension-style texture objects (tinygltf::Value::Object)
+void readTextureTransform(const tinygltf::Value& texObj, TextureTransform& out)
+{
+    if (!texObj.IsObject())
+        return;
+
+    const auto& obj = texObj.Get<tinygltf::Value::Object>();
+
+    if (obj.count("extensions") &&
+        obj.at("extensions").Has("KHR_texture_transform"))
+    {
+        const auto& ext = obj.at("extensions").Get("KHR_texture_transform");
+
+        if (ext.Has("offset")) {
+            const auto& arr = ext.Get("offset").Get<tinygltf::Value::Array>();
+            out.offset = glm::vec2(arr[0].Get<double>(), arr[1].Get<double>());
+        }
+
+        if (ext.Has("scale")) {
+            const auto& arr = ext.Get("scale").Get<tinygltf::Value::Array>();
+            out.scale = glm::vec2(arr[0].Get<double>(), arr[1].Get<double>());
+        }
+
+        if (ext.Has("rotation")) {
+            out.rotation = (float)ext.Get("rotation").Get<double>();
+        }
+
+        if (ext.Has("texCoord")) {
+            out.texCoord = ext.Get("texCoord").Get<int>();
+        }
+    }
+}
+
 //mipmaps
 void generateMipmaps(State* state, VkImage image, VkFormat imageFormat, int32_t texWidth, int32_t texHeight, uint32_t mipLevels) {
     VkFormatProperties formatProperties;
@@ -194,14 +227,7 @@ void generateMipmaps(State* state, VkImage image, VkFormat imageFormat, int32_t 
     endSingleTimeCommands(state, commandBuffer);
 }
 
-void createTextureFromMemory(
-    State* state,
-    const unsigned char* pixels,
-    size_t size,
-    int width,
-    int height,
-    int channels,
-    Texture& outTex)
+void createTextureFromMemory(State* state, const unsigned char* pixels, size_t size, int width, int height, int channels, Texture& outTex)
 {
     VkDevice device = state->context->device;
 
@@ -318,7 +344,6 @@ void createTextureFromMemory(
     vkDestroyBuffer(device, stagingBuffer, nullptr);
     vkFreeMemory(device, stagingMemory, nullptr);
 }
-
 void destroyTextures(State* state) {
     VkDevice device = state->context->device;
 
@@ -384,6 +409,13 @@ void textureImageCreate(State* state, std::string texturePath) {
     generateMipmaps(state, state->texture->textureImage, textureFormat, texWidth, texHeight, state->texture->mipLevels);
     ktxTexture_Destroy(kTexture);
 };
+void textureImageDestroy(State* state) {
+    if (state->texture->textureImage != VK_NULL_HANDLE)
+        vkDestroyImage(state->context->device, state->texture->textureImage, nullptr);
+
+    if (state->texture->textureImageMemory != VK_NULL_HANDLE)
+        vkFreeMemory(state->context->device, state->texture->textureImageMemory, nullptr);
+};
 
 void textureImageViewCreate(State* state) {
     // Use the exact VkFormat the image was created with.
@@ -396,13 +428,6 @@ void textureImageViewCreate(State* state) {
 };
 void textureImageViewDestroy(State* state) {
     vkDestroyImageView(state->context->device, state->texture->textureImageView, nullptr);
-};
-void textureImageDestroy(State* state) {
-    if (state->texture->textureImage != VK_NULL_HANDLE)
-        vkDestroyImage(state->context->device, state->texture->textureImage, nullptr);
-
-    if (state->texture->textureImageMemory != VK_NULL_HANDLE)
-        vkFreeMemory(state->context->device, state->texture->textureImageMemory, nullptr);
 };
 
 void textureSamplerCreate(State* state) {
@@ -431,3 +456,59 @@ void textureSamplerCreate(State* state) {
 void textureSamplerDestroy(State* state) {
     vkDestroySampler(state->context->device, state->texture->textureSampler, nullptr);
 };
+
+void createModelTextures(State* state, Model* model, const tinygltf::Model& gltf, std::unordered_map<int, TextureRole>& textureRoles) 
+{
+    const uint32_t baseIndex = model->baseTextureIndex;
+
+    // If the glTF has embedded or external images
+    if (!gltf.images.empty())
+    {
+        state->scene->textures.reserve(
+            state->scene->textures.size() + gltf.images.size()
+        );
+
+        for (int i = 0; i < (int)gltf.images.size(); i++)
+        {
+            const tinygltf::Image& img = gltf.images[i];
+
+            Texture* tex = new Texture{};
+
+            int globalIndex = baseIndex + i;
+
+            // Assign role if known, otherwise default to BaseColor
+            if (textureRoles.count(globalIndex))
+                tex->role = textureRoles[globalIndex];
+            else
+                tex->role = TextureRole::BaseColor;
+
+            // Upload to GPU
+            createTextureFromMemory(
+                state,
+                img.image.data(),
+                img.image.size(),
+                img.width,
+                img.height,
+                img.component,
+                *tex
+            );
+
+            state->scene->textures.push_back(tex);
+        }
+    }
+    else
+    {
+        // No images in glTF → use fallback texture
+        Texture* tex = new Texture{};
+
+        textureImageCreate(state, state->config->DEFAULT_TEXTURE_PATH);
+        textureImageViewCreate(state);
+        textureSamplerCreate(state);
+
+        tex->textureImageView = state->texture->textureImageView;
+        tex->textureSampler = state->texture->textureSampler;
+        tex->role = TextureRole::BaseColor;
+
+        state->scene->textures.push_back(tex);
+    }
+}

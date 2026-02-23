@@ -1,15 +1,21 @@
 #pragma once
-#include "vulkan/vulkan.h"
+#include <vulkan/vulkan.h>
+#include "core/math.h"
 #include <string>
 namespace tinygltf {
 	struct TextureInfo;
 	struct NormalTextureInfo;
 	struct OcclusionTextureInfo;
-}
+	class Value;
+	struct Model;
+};
 
 struct State;
 struct Texture;
 struct TextureTransform;
+enum TextureRole;
+struct Model;
+
 // Base type
 void readTextureTransform(
 	const tinygltf::TextureInfo& info,
@@ -24,6 +30,8 @@ void readTextureTransform(
 void readTextureTransform(
 	const tinygltf::OcclusionTextureInfo& info,
 	TextureTransform& out);
+// Overload for extension-style texture objects (tinygltf::Value::Object)
+void readTextureTransform(const tinygltf::Value& texObj, TextureTransform& out);
 
 void generateMipmaps(State* state, VkImage image, VkFormat imageFormat, int32_t texWidth, int32_t texHeight, uint32_t mipLevels);
 
@@ -46,3 +54,4 @@ void textureImageViewDestroy(State* state);
 void textureSamplerCreate(State* state);
 void textureSamplerDestroy(State* state);
 
+void createModelTextures(State* state, Model* model, const tinygltf::Model& gltf, std::unordered_map<int, TextureRole>& textureRoles);
