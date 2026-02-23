@@ -79,6 +79,10 @@ struct Mesh {
 	int                   materialIndex = -1;
 	int					  gpuIndex = -1;
 
+	glm::vec3 minBounds;
+	glm::vec3 maxBounds;
+	glm::vec3 center;
+
 	//Move To GPU
 	VkBuffer       vertexBuffer = VK_NULL_HANDLE;
 	VkDeviceMemory vertexMemory = VK_NULL_HANDLE;

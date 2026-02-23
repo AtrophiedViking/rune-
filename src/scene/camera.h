@@ -16,7 +16,7 @@ struct Camera {
 	glm::vec3 worldUp = glm::vec3(0.0f, 1.0f, 0.0f);
 	glm::vec3 position = glm::vec3(0.0f, 0.0f, 0.0f);  // Start at world origin
 	glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);        // Y-axis as world up
-	float yaw = 90.0f;                                 // Look along negative Z-axis (OpenGL convention)
+	float yaw = 0.0f;                                 // Look along negative Z-axis (OpenGL convention)
 	float pitch = 0.0f;
 	float zoom = (85.0f);
 
@@ -26,17 +26,17 @@ struct Camera {
 	bool lookMode;
 
 	void updateCameraVectors() {
-		// Calculate the new front vector
-		glm::vec3 newFront;
-		newFront.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
-		newFront.y = sin(glm::radians(pitch));
-		newFront.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
-		front = glm::normalize(newFront);
+    glm::vec3 newFront;
+    newFront.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
+    newFront.y = sin(glm::radians(pitch));
+    newFront.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
+    front = glm::normalize(newFront);
 
-		// Recalculate the right and up vectors
-		right = glm::normalize(glm::cross(front, worldUp));
-		up = glm::normalize(glm::cross(right, front));
-	}
+    right = glm::normalize(glm::cross(front, worldUp));
+    up    = glm::normalize(glm::cross(right, front));
+}
+
+
 	glm::mat4 getViewMatrix() const {
 		return glm::lookAt(position, position + front, up);
 	}
@@ -65,13 +65,14 @@ struct Camera {
 			position += right * velocity;
 			break;
 		case CameraMovement::UP:
-			position += up * velocity;
-			break;
-		case CameraMovement::DOWN:
-			position -= up * velocity;
+			position += worldUp * velocity; 
+			break;							
+		case CameraMovement::DOWN:			
+			position -= worldUp * velocity; 
 			break;
 		}
 	}
+
 	void processMouseMovement(float xOffset, float yOffset, bool constrainPitch) {
 		xOffset *= mouseSensitivity;
 		yOffset *= mouseSensitivity;

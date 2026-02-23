@@ -5,7 +5,6 @@ namespace tinygltf {
 };
 struct State;
 //Utility
-//Utility
 std::string extractBaseDir(const std::string& path);
 //Loading
 void loadModel(State* state, std::string modelPath);

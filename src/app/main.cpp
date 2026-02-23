@@ -14,7 +14,7 @@ Config config
 			.msaaSamples = VK_SAMPLE_COUNT_1_BIT,
 			.DEFAULT_TEXTURE_PATH = "./res/textures/default_texture.ktx2",
 			.KOBOLD_MODEL_PATH = "./res/models/Kobold.glb",
-			.HOVER_BIKE_MODEL_PATH = "./res/models/MultiUVTest.glb",
+			.HOVER_BIKE_MODEL_PATH = "./res/models/ABeautifulGame.glb",
 			.MODEL_PATH = "./res/models/MosquitoInAmber.glb",
 };
 

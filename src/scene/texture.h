@@ -36,6 +36,10 @@ struct Texture{
 	VkDeviceMemory colorImageMemory;
 	VkImageView colorImageView;
 
+	VkImage        sceneColorImage;
+	VkDeviceMemory sceneColorImageMemory;
+	VkImageView    sceneColorImageView;
+
 	VkDescriptorSet descriptorSet;
 	VkFormat format;
 

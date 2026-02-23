@@ -245,13 +245,13 @@ void processNode(
 				// POSITION
 				const float* pos = reinterpret_cast<const float*>(
 					&posBuffer.data[posBufferView.byteOffset + posAccessor.byteOffset + i * posStride]);
-				v.pos = { pos[0], pos[2], -pos[1] };
+				v.pos = { pos[0], pos[1], pos[2] };
 
 				// NORMAL
 				if (hasNormals) {
 					const float* n = reinterpret_cast<const float*>(
 						&normalBuffer->data[normalBufferView->byteOffset + normalAccessor->byteOffset + i * normalStride]);
-					v.normal = { n[0], n[2], -n[1] };
+					v.normal = { n[0], n[1], n[2] };
 				}
 
 				// TEXCOORD_0
@@ -350,11 +350,24 @@ void processNode(
 				if (hasTangents) {
 					const float* t = reinterpret_cast<const float*>(
 						&tanBuffer->data[tanBufferView->byteOffset + tanAccessor->byteOffset + i * tanStride]);
-					v.tangent = { t[0], t[2], -t[1], t[3] };
+					v.tangent = { t[0], t[1], t[2], t[3] };
 				}
 
 				newMesh->vertices.push_back(v);
 			}
+			// ─────────────────────────────────────────────
+			// Compute mesh bounds + center (minimal fix)
+			// ─────────────────────────────────────────────
+			newMesh->minBounds = glm::vec3(FLT_MAX);
+			newMesh->maxBounds = glm::vec3(-FLT_MAX);
+
+			for (const Vertex& v : newMesh->vertices)
+			{
+				newMesh->minBounds = glm::min(newMesh->minBounds, v.pos);
+				newMesh->maxBounds = glm::max(newMesh->maxBounds, v.pos);
+			}
+
+			newMesh->center = 0.5f * (newMesh->minBounds + newMesh->maxBounds);
 
 			// ─────────────────────────────────────────────
 			// Index loop

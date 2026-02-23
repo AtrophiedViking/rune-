@@ -10,5 +10,8 @@ VkSampleCountFlagBits getMaxUsableSampleCount(State* state);
 void colorResourceCreate(State* state);
 void colorResourceDestroy(State* state);
 
+void sceneColorResourceCreate(State* state);
+void sceneColorResourceDestroy(State* state);
+
 void depthResourceCreate(State* state);
 void depthBufferDestroy(State* state);

@@ -28,7 +28,7 @@ void init(State *state) {
 	state->gui = new Gui{};
 	state->scene = new Scene{};
 	state->scene->camera = new Camera{};
-
+	state->scene->camera->updateCameraVectors();
 	windowCreate(state);
 	deviceCreate(state);
 
@@ -71,13 +71,13 @@ void init(State *state) {
 	state->scene->models[1]->setTransform(
 		{ 0.5f, 0.5f, 0.0f },
 		{ 0.0f, 0.0f, 0.0f },
-		{ 10.0f, 10.0f, 10.0f }
+		{ 5.0f, 5.0f, 5.0f }
 	);
 
 	loadModel(state, state->config->HOVER_BIKE_MODEL_PATH);
 	state->scene->models[2]->setTransform(
 		{ 0.0f, -1.0f, 0.0f },
-		{ 0.0f, 0.0f, -90.0f },
+		{ 0.0f, 0.0f, 0.0f },
 		{ 1.0f, 1.0f, 1.0f }
 	);
 

@@ -117,6 +117,39 @@ void colorResourceDestroy(State* state) {
 	vkFreeMemory(state->context->device, state->texture->colorImageMemory, nullptr);
 };
 
+void sceneColorResourceCreate(State* state) {
+	VkFormat colorFormat = state->window.swapchain.format;
+
+	imageCreate(
+		state,
+		state->window.swapchain.imageExtent.width,
+		state->window.swapchain.imageExtent.height,
+		colorFormat,
+		VK_IMAGE_TILING_OPTIMAL,
+		// NOTE: no TRANSIENT, and we add SAMPLED
+		VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+		state->texture->sceneColorImage,
+		state->texture->sceneColorImageMemory,
+		1, // mipLevels
+		VK_SAMPLE_COUNT_1_BIT // single-sample
+	);
+
+	state->texture->sceneColorImageView =
+		imageViewCreate(
+			state,
+			state->texture->sceneColorImage,
+			colorFormat,
+			VK_IMAGE_ASPECT_COLOR_BIT,
+			1
+		);
+}
+void sceneColorResourceDestroy(State* state) {
+	vkDestroyImageView(state->context->device, state->texture->sceneColorImageView, nullptr);
+	vkDestroyImage(state->context->device, state->texture->sceneColorImage, nullptr);
+	vkFreeMemory(state->context->device, state->texture->sceneColorImageMemory, nullptr);
+};
+
 void depthResourceCreate(State* state) {
 	VkFormat depthFormat = findDepthFormat(state);
 	imageCreate(state, state->window.swapchain.imageExtent.width, state->window.swapchain.imageExtent.height, depthFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, state->texture->depthImage, state->texture->depthImageMemory, 1, state->config->msaaSamples);

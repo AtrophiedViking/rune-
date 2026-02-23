@@ -84,11 +84,11 @@ void commandBufferRecord(State* state)
         .renderPass = state->renderer->renderPass,
         .framebuffer = state->buffers->framebuffers[state->renderer->imageAquiredIndex],
         .clearValueCount = static_cast<uint32_t>(clearValues.size()),
-        .pClearValues = clearValues.data(),
+        .pClearValues = clearValues.data()
     };
     renderPassInfo.renderArea = {
-        .offset = { 0, 0 },
-        .extent = state->window.swapchain.imageExtent
+            .offset = { 0, 0 },
+            .extent = state->window.swapchain.imageExtent
     };
 
     vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
@@ -122,61 +122,77 @@ void commandBufferRecord(State* state)
     );
 
     // ─────────────────────────────────────────────
-    // Per-model loop
+    // GLOBAL DRAW ITEM COLLECTION
     // ─────────────────────────────────────────────
+    std::vector<DrawItem> allItems;
+
     for (Model* model : state->scene->models)
     {
-        // 2. Gather draw items for THIS model
-        std::vector<DrawItem> items;
         gatherDrawItems(
             model->rootNode,
             state->scene->camera->getPosition(),
             state->scene->materials,
-            items
+            model,
+            allItems
         );
+    }
 
-        // 3. Split opaque / transparent (local vectors)
-        std::vector<DrawItem> opaqueItems;
-        std::vector<DrawItem> transparentItems;
+    // ─────────────────────────────────────────────
+    // SPLIT OPAQUE / TRANSPARENT
+    // ─────────────────────────────────────────────
+    std::vector<DrawItem> opaqueItems;
+    std::vector<DrawItem> transparentItems;
 
-        for (const DrawItem& item : items) {            
-            if (item.transparent)
-                transparentItems.push_back(item);
-            else
-                opaqueItems.push_back(item);
-        }
+    for (const DrawItem& item : allItems)
+    {
+        if (item.transparent)
+            transparentItems.push_back(item);
+        else
+            opaqueItems.push_back(item);
+    }
 
-        // 4. Draw opaque with main pipeline
-        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, state->renderer->graphicsPipeline);
-        for (const DrawItem& item : opaqueItems) {
-            drawMesh(
-                state,
-                cmd,
-                item.mesh,
-                item.node->getGlobalMatrix(),
-                model->transform
-            );
-        }
+    // ─────────────────────────────────────────────
+    // DRAW OPAQUE FIRST
+    // ─────────────────────────────────────────────
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, state->renderer->graphicsPipeline);
 
-        // 5. Sort transparent back-to-front
-        std::sort(
-            transparentItems.begin(), transparentItems.end(),
-            [](const DrawItem& a, const DrawItem& b) {
-                return a.distanceToCamera > b.distanceToCamera;
-            }
+    for (const DrawItem& item : opaqueItems)
+    {
+        drawMesh(
+            state,
+            cmd,
+            item.mesh,
+            item.node->getGlobalMatrix(),
+            item.model->transform
         );
+    }
 
-        // 6. Draw transparent with transparency pipeline
-        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, state->renderer->transparencyPipeline);
-        for (const DrawItem& item : transparentItems) {
-            drawMesh(
-                state,
-                cmd,
-                item.mesh,
-                item.node->getGlobalMatrix(),
-                model->transform
-            );
+    // ─────────────────────────────────────────────
+    // SORT TRANSPARENT BACK-TO-FRONT
+    // ─────────────────────────────────────────────
+    std::sort(
+        transparentItems.begin(),
+        transparentItems.end(),
+        [](const DrawItem& a, const DrawItem& b)
+        {
+            return a.distanceToCamera > b.distanceToCamera;
         }
+    );
+
+    // ─────────────────────────────────────────────
+    // DRAW TRANSPARENT LAST
+    // ─────────────────────────────────────────────
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, state->renderer->transparencyPipeline);
+
+    for (const DrawItem& item : transparentItems)
+    {
+        drawMesh(
+            state,
+            cmd,
+            item.mesh,
+            item.node->getGlobalMatrix(),
+            item.model->transform
+        );
     }
 
     vkCmdEndRenderPass(cmd);

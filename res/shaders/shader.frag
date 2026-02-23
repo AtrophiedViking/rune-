@@ -226,18 +226,19 @@ float getThickness()
     return thick;
 }
 
-vec3 applyVolume(vec3 color)
+vec3 applyVolumeToTransmission(vec3 transmittedColor)
 {
     float thick = getThickness();
 
-    // attenuationDistance <= 0 → treat as no attenuation
-    if (pc.attenuation.w <= 0.0)
-        return color;
+    float dist = pc.attenuation.w;
+    if (dist <= 0.0)
+        return transmittedColor;
 
-    vec3 att = exp(-pc.attenuation.xyz * thick / pc.attenuation.w);
-    return color * att;
+    float ratio = thick / max(dist, 1e-4);
+    vec3 att = pow(pc.attenuation.xyz, vec3(ratio));
+
+    return transmittedColor * att;
 }
-
 
 
 // ─────────────────────────────────────────────
@@ -356,9 +357,14 @@ void main()
 
     float transmission = getTransmission();
     vec3 transmittedColor = baseColor.rgb;
+    
+    if (transmission > 0.0)
+    {
+        transmittedColor = applyVolumeToTransmission(transmittedColor);
+    }
+    
     vec3 color = mix(colorOpaque, transmittedColor, transmission);
-
-    color = applyVolume(color);
+    
     color = vec3(1.0) - exp(-color * ubo.exposure);
     color = pow(color, vec3(1.0 / ubo.gamma));
 
