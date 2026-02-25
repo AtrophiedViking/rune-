@@ -9,7 +9,8 @@ struct Mesh;
 struct Vertex;
 struct Buffers{
 	VkCommandBuffer* commandBuffer;
-	VkFramebuffer* framebuffers;
+	VkFramebuffer* opaqueFramebuffers;
+	VkFramebuffer* transparencyFramebuffers;
 	VkFramebuffer* presentFramebuffers;
 	VkBuffer vertexBuffer;
 	VkDeviceMemory vertexBufferMemory;

@@ -28,7 +28,7 @@ VkCommandBuffer beginSingleTimeCommands(State* state, VkCommandPool commandPool)
 	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 	allocInfo.commandPool = commandPool,
-		allocInfo.commandBufferCount = 1;
+	allocInfo.commandBufferCount = 1;
 
 	VkCommandBuffer commandBuffer;
 	vkAllocateCommandBuffers(state->context->device, &allocInfo, &commandBuffer);
@@ -70,65 +70,29 @@ void commandBufferRecord(State* state)
 {
     VkCommandBuffer cmd = state->buffers->commandBuffer[state->renderer->frameIndex];
 
-    VkCommandBufferBeginInfo beginInfo{
-        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-    };
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+
     vkBeginCommandBuffer(cmd, &beginInfo);
 
-    // ─────────────────────────────────────────────
-    // PASS 1: MAIN SCENE RENDER PASS
-    // ─────────────────────────────────────────────
-    std::array<VkClearValue, 2> clearValues{};
-    clearValues[0].color = { state->config->backgroundColor.color };
-    clearValues[1].depthStencil = { 1.0f, 0 };
 
-    VkRenderPassBeginInfo renderPassInfo{
-        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-        .renderPass = state->renderer->renderPass,
-        .framebuffer = state->buffers->framebuffers[state->renderer->imageAquiredIndex],
-        .clearValueCount = static_cast<uint32_t>(clearValues.size()),
-        .pClearValues = clearValues.data(),
+
+    VkViewport viewport{
+        .x = 0.f, .y = 0.f,
+        .width = (float)state->window.swapchain.imageExtent.width,
+        .height = (float)state->window.swapchain.imageExtent.height,
+        .minDepth = 0.f, .maxDepth = 1.0f
     };
-    renderPassInfo.renderArea = {
-        .offset = { 0, 0 },
+
+    VkRect2D scissor{
+        .offset = {0,0},
         .extent = state->window.swapchain.imageExtent
     };
 
-    vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-
-    VkViewport viewport{
-        .x = 0.0f,
-        .y = 0.0f,
-        .width = (float)state->window.swapchain.imageExtent.width,
-        .height = (float)state->window.swapchain.imageExtent.height,
-        .minDepth = 0.0f,
-        .maxDepth = 1.0f,
-    };
-    vkCmdSetViewport(cmd, 0, 1, &viewport);
-
-    VkRect2D scissor{
-        .offset = { 0, 0 },
-        .extent = state->window.swapchain.imageExtent,
-    };
-    vkCmdSetScissor(cmd, 0, 1, &scissor);
-
-    // Global UBO (set = 0)
-    vkCmdBindDescriptorSets(
-        cmd,
-        VK_PIPELINE_BIND_POINT_GRAPHICS,
-        state->renderer->pipelineLayout,
-        0,
-        1,
-        &state->renderer->descriptorSets[state->renderer->frameIndex],
-        0,
-        nullptr
-    );
-
     // ─────────────────────────────────────────────
-    // DRAW LIST BUILD
+    // BUILD DRAW LISTS
     // ─────────────────────────────────────────────
     std::vector<DrawItem> allItems;
-
     for (Model* model : state->scene->models)
     {
         gatherDrawItems(
@@ -143,7 +107,7 @@ void commandBufferRecord(State* state)
     std::vector<DrawItem> opaqueItems;
     std::vector<DrawItem> transparentItems;
 
-    for (const DrawItem& item : allItems)
+    for (auto& item : allItems)
     {
         if (item.transparent)
             transparentItems.push_back(item);
@@ -151,93 +115,215 @@ void commandBufferRecord(State* state)
             opaqueItems.push_back(item);
     }
 
-    // OPAQUE
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, state->renderer->graphicsPipeline);
+    // ─────────────────────────────────────────────
+    // PASS 1: OPAQUE (MSAA COLOR + MSAA DEPTH)
+    // ─────────────────────────────────────────────
+    std::array<VkClearValue, 2> clearValues{};
+    clearValues[0].color = { state->config->backgroundColor.color };
+    clearValues[1].depthStencil = { 1.0f, 0 };
 
-    for (const DrawItem& item : opaqueItems)
-    {
-        drawMesh(
-            state,
-            cmd,
-            item.mesh,
-            item.node->getGlobalMatrix(),
-            item.model->transform
-        );
-    }
+    VkRenderPassBeginInfo opaqueInfo{
+        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+        .renderPass = state->renderer->opaqueRenderPass,
+        .framebuffer = state->buffers->opaqueFramebuffers[state->renderer->imageAquiredIndex],
+        .renderArea = {{0,0}, state->window.swapchain.imageExtent},
+        .clearValueCount = 2,
+        .pClearValues = clearValues.data(),
+    };
 
-    // TRANSPARENT (back-to-front)
-    std::sort(
-        transparentItems.begin(),
-        transparentItems.end(),
-        [](const DrawItem& a, const DrawItem& b)
-        {
-            return a.distanceToCamera > b.distanceToCamera;
-        }
+    vkCmdBeginRenderPass(cmd, &opaqueInfo, VK_SUBPASS_CONTENTS_INLINE);
+    vkCmdSetViewport(cmd, 0, 1, &viewport);
+    vkCmdSetScissor(cmd, 0, 1, &scissor);
+
+    // Global UBO
+    vkCmdBindDescriptorSets(
+        cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+        state->renderer->opaquePipelineLayout,
+        0, 1,
+        &state->renderer->descriptorSets[state->renderer->frameIndex],
+        0, nullptr
     );
 
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, state->renderer->transparencyPipeline);
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, state->renderer->opaquePipeline);
 
-    for (const DrawItem& item : transparentItems)
+    for (auto& item : opaqueItems)
     {
+        if (item.transparent) {
+            // This should NEVER happen
+            printf("ERROR: transparent item in opaque pass (mesh %p)\n", (void*)item.mesh);
+        }
+
         drawMesh(
-            state,
-            cmd,
+            state, cmd,
             item.mesh,
             item.node->getGlobalMatrix(),
-            item.model->transform
+            item.model->transform,
+            state->renderer->opaquePipelineLayout
         );
     }
 
     vkCmdEndRenderPass(cmd);
 
     // ─────────────────────────────────────────────
-    // PASS 2: PRESENT RENDER PASS (FULLSCREEN TRIANGLE)
+    // DEPTH BLIT: MSAA → SINGLE SAMPLE
     // ─────────────────────────────────────────────
-    VkClearValue presentClear{};
-    presentClear.color = { 0.0f, 0.0f, 0.0f, 1.0f };
 
-    VkRenderPassBeginInfo presentPassInfo{
+    // MSAA depth → TRANSFER_SRC
+    VkImageMemoryBarrier msaaToSrc{
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+        .dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
+        .oldLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+        .newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        .image = state->texture->msaaDepthImage,
+        .subresourceRange = {VK_IMAGE_ASPECT_DEPTH_BIT,0,1,0,1}
+    };
+
+    vkCmdPipelineBarrier(
+        cmd,
+        VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        0, 0, nullptr, 0, nullptr,
+        1, &msaaToSrc
+    );
+
+    // single depth → TRANSFER_DST
+    VkImageMemoryBarrier singleToDst{
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .srcAccessMask = 0,
+        .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+        .oldLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+        .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        .image = state->texture->singleDepthImage,
+        .subresourceRange = {VK_IMAGE_ASPECT_DEPTH_BIT,0,1,0,1}
+    };
+
+    vkCmdPipelineBarrier(
+        cmd,
+        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        0, 0, nullptr, 0, nullptr,
+        1, &singleToDst
+    );
+
+    // Blit depth
+    VkImageBlit depthBlit{};
+    depthBlit.srcSubresource = { VK_IMAGE_ASPECT_DEPTH_BIT,0,0,1 };
+    depthBlit.dstSubresource = { VK_IMAGE_ASPECT_DEPTH_BIT,0,0,1 };
+    depthBlit.srcOffsets[1] = {
+        (int32_t)state->window.swapchain.imageExtent.width,
+        (int32_t)state->window.swapchain.imageExtent.height,
+        1
+    };
+    depthBlit.dstOffsets[1] = depthBlit.srcOffsets[1];
+
+    vkCmdBlitImage(
+        cmd,
+        state->texture->msaaDepthImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        state->texture->singleDepthImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        1, &depthBlit,
+        VK_FILTER_NEAREST
+    );
+
+    // single depth → ATTACHMENT
+    VkImageMemoryBarrier depthToAttachment{
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+        .dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
+        .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        .newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+        .image = state->texture->singleDepthImage,
+        .subresourceRange = {VK_IMAGE_ASPECT_DEPTH_BIT,0,1,0,1}
+    };
+
+    vkCmdPipelineBarrier(
+        cmd,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+        0, 0, nullptr, 0, nullptr,
+        1, &depthToAttachment
+    );
+
+    // ─────────────────────────────────────────────
+    // PASS 2: TRANSPARENT (LOAD COLOR + LOAD DEPTH)
+    // ─────────────────────────────────────────────
+
+    VkRenderPassBeginInfo transInfo{
+        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+        .renderPass = state->renderer->transparencyRenderPass,
+        .framebuffer = state->buffers->transparencyFramebuffers[state->renderer->imageAquiredIndex],
+        .renderArea = {{0,0}, state->window.swapchain.imageExtent},
+        .clearValueCount = 0,
+        .pClearValues = nullptr,
+    };
+
+    vkCmdBeginRenderPass(cmd, &transInfo, VK_SUBPASS_CONTENTS_INLINE);
+    vkCmdSetViewport(cmd, 0, 1, &viewport);
+    vkCmdSetScissor(cmd, 0, 1, &scissor);
+
+    vkCmdBindDescriptorSets(
+        cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+        state->renderer->transparencyPipelineLayout,
+        0, 1,
+        &state->renderer->descriptorSets[state->renderer->frameIndex],
+        0, nullptr
+    );
+
+    // Sort back-to-front
+    std::sort(
+        transparentItems.begin(),
+        transparentItems.end(),
+        [](auto& a, auto& b) { return a.distanceToCamera > b.distanceToCamera; }
+    );
+
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, state->renderer->transparencyPipeline);
+
+    for (auto& item : transparentItems)
+    {
+        drawMesh(
+            state, cmd,
+            item.mesh,
+            item.node->getGlobalMatrix(),
+            item.model->transform,
+            state->renderer->transparencyPipelineLayout
+        );
+    }
+
+    vkCmdEndRenderPass(cmd);
+
+    // ─────────────────────────────────────────────
+    // PASS 3: PRESENT
+    // ─────────────────────────────────────────────
+    std::array<VkClearValue, 2> presentClearValues{};
+    presentClearValues[0].color = { state->config->backgroundColor.color };
+    presentClearValues[1].depthStencil = { 1.0f, 0 };
+
+    VkRenderPassBeginInfo presentInfo{
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
         .renderPass = state->renderer->presentRenderPass,
         .framebuffer = state->buffers->presentFramebuffers[state->renderer->imageAquiredIndex],
+        .renderArea = {{0,0}, state->window.swapchain.imageExtent},
         .clearValueCount = 1,
-        .pClearValues = &presentClear,
-    };
-    presentPassInfo.renderArea = {
-        .offset = { 0, 0 },
-        .extent = state->window.swapchain.imageExtent
+        .pClearValues = presentClearValues.data(),
     };
 
-    vkCmdBeginRenderPass(cmd, &presentPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-
-    // Reuse same viewport/scissor
+    vkCmdBeginRenderPass(cmd, &presentInfo, VK_SUBPASS_CONTENTS_INLINE);
     vkCmdSetViewport(cmd, 0, 1, &viewport);
     vkCmdSetScissor(cmd, 0, 1, &scissor);
 
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, state->renderer->presentPipeline);
 
-    // Descriptor set that binds sceneColorImageView as sampler2D
     vkCmdBindDescriptorSets(
-        cmd,
-        VK_PIPELINE_BIND_POINT_GRAPHICS,
+        cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
         state->renderer->presentPipelineLayout,
-        0,
-        1,
+        0, 1,
         &state->renderer->presentSet,
-        0,
-        nullptr
+        0, nullptr
     );
 
-    // Fullscreen triangle
     vkCmdDraw(cmd, 3, 1, 0, 0);
-
     vkCmdEndRenderPass(cmd);
 
-    // ─────────────────────────────────────────────
-    // GUI (on top of swapchain)
-    // ─────────────────────────────────────────────
     guiDraw(state, cmd);
-
-    PANIC(vkEndCommandBuffer(cmd), "Failed To Record Command Buffer");
+    vkEndCommandBuffer(cmd);
 }
-

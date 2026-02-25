@@ -46,9 +46,8 @@ layout(binding = 0) uniform UniformBufferObject {
     float prefilteredCubeMipLevels; // unused here
     float scaleIBLAmbient;          // unused here
 } ubo;
-
 // ─────────────────────────────────────────────
-// UBO (set = 1, binding = 5)
+// UBO (set = 1, binding = 0)
 // ─────────────────────────────────────────────
 struct TexTransform {
     // xy = offset, zw = scale
@@ -79,6 +78,7 @@ layout(set = 1, binding = 4) uniform sampler2D emissiveTex;
 layout(set = 1, binding = 5) uniform sampler2D normalTex;
 layout(set = 1, binding = 6) uniform sampler2D transmissionTex;
 layout(set = 1, binding = 7) uniform sampler2D volumeTex;
+
 
 
 // ─────────────────────────────────────────────
@@ -353,28 +353,11 @@ void main()
     }
 
     vec3 ambient = albedo * 0.03 * occlusion;
-    vec3 colorOpaque = ambient + Lo + emissive;
+    vec3 color = ambient + Lo + emissive;
 
-    float transmission = getTransmission();
-    vec3 transmittedColor = baseColor.rgb;
-    
-    if (transmission > 0.0)
-    {
-        transmittedColor = applyVolumeToTransmission(transmittedColor);
-    }
-    
-    vec3 color = mix(colorOpaque, transmittedColor, transmission);
-    
     color = vec3(1.0) - exp(-color * ubo.exposure);
     color = pow(color, vec3(1.0 / ubo.gamma));
 
-     // Option A: simple, glTF-like
-    //float alpha = baseColor.a * (1.0 - transmission);
-    
-    // or, if you want to ignore baseColor.a for transmission:
-    float alpha = baseColor.a * (1.0 - (transmission/2));
-
-    
+    float alpha = 1.0;
     outColor = vec4(color, alpha);
-
 }

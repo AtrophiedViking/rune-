@@ -1,8 +1,11 @@
 #pragma once
 #include "vulkan/vulkan.h"
 struct State;
-void frameBuffersCreate(State* state);
-void frameBuffersDestroy(State* state);
+void opaqueFrameBuffersCreate(State* state);
+void opaqueFrameBuffersDestroy(State* state);
+
+void transparentFrameBuffersCreate(State* state);
+void transparentFrameBuffersDestroy(State* state);
 
 void presentFramebuffersCreate(State* state);
 void presentFramebuffersDestroy(State* state);

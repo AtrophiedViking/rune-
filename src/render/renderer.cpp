@@ -8,7 +8,11 @@
 #include "scene/gather.h"
 #include "core/state.h"
 
-void drawMesh(State* state, VkCommandBuffer cmd, const Mesh* mesh, const glm::mat4& nodeMatrix, const glm::mat4& modelTransform)
+void drawMesh(State* state, VkCommandBuffer cmd,
+	const Mesh* mesh,
+	const glm::mat4& nodeMatrix,
+	const glm::mat4& modelTransform,
+	VkPipelineLayout layout)
 {
 	const Material* mat = state->scene->materials[mesh->materialIndex];
 
@@ -16,7 +20,7 @@ void drawMesh(State* state, VkCommandBuffer cmd, const Mesh* mesh, const glm::ma
 	vkCmdBindDescriptorSets(
 		cmd,
 		VK_PIPELINE_BIND_POINT_GRAPHICS,
-		state->renderer->pipelineLayout,
+		layout,
 		1, // set = 1
 		1,
 		&mat->descriptorSet,
@@ -52,7 +56,7 @@ void drawMesh(State* state, VkCommandBuffer cmd, const Mesh* mesh, const glm::ma
 
 	vkCmdPushConstants(
 		cmd,
-		state->renderer->pipelineLayout,
+		layout,
 		VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
 		0,
 		sizeof(PushConstantBlock),

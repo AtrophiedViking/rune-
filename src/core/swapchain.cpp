@@ -119,9 +119,10 @@ void swapchainDestroy(State* state) {
 void swapchainCleanup(State* state) {
 	sceneColorResourceDestroy(state);
 	colorResourceDestroy(state);
-	depthBufferDestroy(state);
+	depthResourceDestroy(state);
 	presentFramebuffersDestroy(state);
-	frameBuffersDestroy(state);
+	transparentFrameBuffersDestroy(state);
+	opaqueFrameBuffersDestroy(state);
 	imageViewsDestroy(state);
 	swapchainDestroy(state);
 	guiFramebuffersDestroy(state);
@@ -145,11 +146,11 @@ void swapchainRecreate(State* state) {
 	sceneColorResourceCreate(state);
 	colorResourceCreate(state);
 	depthResourceCreate(state);
-	frameBuffersCreate(state);
+	opaqueFrameBuffersCreate(state);
+	transparentFrameBuffersCreate(state);
 	presentFramebuffersCreate(state);
 	presentDescriptorSetUpdate(state);
 	guiFramebuffersCreate(state);
 	ImGui_ImplVulkan_SetMinImageCount(state->window.swapchain.imageCount);
 	commandBufferRecord(state);
-
 };

@@ -5,11 +5,11 @@
 
 struct State;
 
-void graphicsPipelineCreate(State* state);
-void graphicsPipelineDestroy(State* state);
+void opaquePipelineCreate(State* state);
+void opaquePipelineDestroy(State* state);
 
-void tranparencyPipelineCreate(State* state);
-void tranparencyPipelineDestroy(State* state);
+void transparencyPipelineCreate(State* state);
+void transparencyPipelineDestroy(State* state);
 
 void presentPipelineCreate(State* state);
 void presentPipelineDestroy(State* state);

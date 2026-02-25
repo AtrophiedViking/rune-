@@ -148,7 +148,7 @@ void descriptorPoolCreate(State* state)
 	};
 
 	PANIC(
-		vkCreateDescriptorPool(state->context->device, &poolInfo, nullptr, &state->renderer->descriptorPool),
+		vkCreateDescriptorPool(state->context->device, &poolInfo, nullptr, &state->renderer->opaqueDescriptorPool),
 		"Failed to create descriptor pool!"
 	);
 }
@@ -186,12 +186,12 @@ void descriptorPoolDestroy(State* state)
 	}
 
 	// 2. Destroy descriptor pool
-	if (state->renderer->descriptorPool != VK_NULL_HANDLE)
+	if (state->renderer->opaqueDescriptorPool != VK_NULL_HANDLE)
 	{
 		vkDestroyDescriptorPool(state->context->device,
-			state->renderer->descriptorPool,
+			state->renderer->opaqueDescriptorPool,
 			nullptr);
-		state->renderer->descriptorPool = VK_NULL_HANDLE;
+		state->renderer->opaqueDescriptorPool = VK_NULL_HANDLE;
 	}
 }
 
@@ -205,7 +205,7 @@ void descriptorSetsCreate(State* state)
 
 	VkDescriptorSetAllocateInfo allocInfo{
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-		.descriptorPool = state->renderer->descriptorPool,
+		.descriptorPool = state->renderer->opaqueDescriptorPool,
 		.descriptorSetCount = frames,
 		.pSetLayouts = layouts.data()
 	};
@@ -255,7 +255,7 @@ void createMaterialDescriptorSets(State* state)
 	{
 		VkDescriptorSetAllocateInfo allocInfo{
 			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-			.descriptorPool = state->renderer->descriptorPool,
+			.descriptorPool = state->renderer->opaqueDescriptorPool,
 			.descriptorSetCount = 1,
 			.pSetLayouts = &state->renderer->textureSetLayout
 		};
@@ -388,7 +388,7 @@ void presentDescriptorSetAllocate(State* state) {
 
 	VkDescriptorSetAllocateInfo allocInfo{
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-		.descriptorPool = state->renderer->descriptorPool, // or whatever pool you use
+		.descriptorPool = state->renderer->opaqueDescriptorPool, // or whatever pool you use
 		.descriptorSetCount = 1,
 		.pSetLayouts = &layout,
 	};

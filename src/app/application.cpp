@@ -35,7 +35,8 @@ void init(State *state) {
 	swapchainCreate(state);
 	swapchainImageGet(state);
 	imageViewsCreate(state);
-	renderPassCreate(state);
+	opaqueRenderPassCreate(state);
+	transparentRenderPassCreate(state);
 	presentRenderPassCreate(state);
 
 	guiRenderPassCreate(state);
@@ -48,8 +49,8 @@ void init(State *state) {
 	createTextureSetLayout(state);
 	presentSetLayoutCreate(state);
 
-	graphicsPipelineCreate(state);
-	tranparencyPipelineCreate(state);
+	opaquePipelineCreate(state);
+	transparencyPipelineCreate(state);
 	presentPipelineCreate(state);
 
 	commandPoolCreate(state);
@@ -61,7 +62,8 @@ void init(State *state) {
 	sceneColorResourceCreate(state);
 	presentSamplerCreate(state);
 
-	frameBuffersCreate(state);
+	opaqueFrameBuffersCreate(state);
+	transparentFrameBuffersCreate(state);
 	presentFramebuffersCreate(state);
 	callbackSetup(state);
 
@@ -122,6 +124,8 @@ void mainloop(State *state) {
 void cleanup(State *state) {
 	vkDestroyShaderModule(state->context->device, state->renderer->fragShaderModule, nullptr);
 	vkDestroyShaderModule(state->context->device, state->renderer->vertShaderModule, nullptr);
+	vkDestroyShaderModule(state->context->device, state->renderer->opaqueFragShaderModule, nullptr);
+
 	swapchainCleanup(state);
 
 	guiClean(state);
@@ -137,10 +141,11 @@ void cleanup(State *state) {
 	commandPoolDestroy(state);
 	presentPipelineDestroy(state);
 	destroySceneColorSampler(state);
-	tranparencyPipelineDestroy(state);
-	graphicsPipelineDestroy(state);
+	transparencyPipelineDestroy(state);
+	opaquePipelineDestroy(state);
 	presentRenderPassDestroy(state);
-	renderPassDestroy(state);
+	transparentRenderPassDestroy(state);
+	opaqueRenderPassDestroy(state);
 	deviceDestroy(state);
 	windowDestroy(state);
 };

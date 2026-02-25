@@ -301,5 +301,8 @@
     <None Include="res\shaders\present_vert.spv">
       <Filter>res\shaders</Filter>
     </None>
+    <None Include="res\shaders\opaque_frag.spv">
+      <Filter>res\shaders</Filter>
+    </None>
   </ItemGroup>
 </Project>

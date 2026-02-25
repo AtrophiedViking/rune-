@@ -27,10 +27,15 @@ struct Texture{
 	VkImageView textureImageView;
 	VkSampler textureSampler;
 
-	VkImage depthImage;
-	VkDeviceMemory depthImageMemory;
-	VkImageView depthImageView;
+	VkImage msaaDepthImage;
+	VkDeviceMemory msaaDepthImageMemory;
+	VkImageView msaaDepthImageView;
+	
 	uint32_t mipLevels;
+
+	VkImage			singleDepthImage;
+	VkDeviceMemory	singleDepthImageMemory;
+	VkImageView		singleDepthImageView;
 
 	VkImage colorImage;
 	VkDeviceMemory colorImageMemory;

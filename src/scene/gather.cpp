@@ -3,62 +3,48 @@
 #include "scene/model.h"
 #include "scene/materials.h"
 #include "scene/mesh.h"
-
+#include "scene/camera.h"
+#include "scene/scene.h"
 #include "core/state.h"
-void gatherDrawItems(const Node* root,
+void gatherDrawItems(
+    const Node* node,
     const glm::vec3& camPos,
     const std::vector<Material*>& materials,
     Model* model,
-    std::vector<DrawItem>& out)
+    std::vector<DrawItem>& outItems)
 {
-    std::function<void(const Node*)> recurse = [&](const Node* node)
-        {
-            glm::mat4 M = node->getGlobalMatrix();
+    // World matrix for this node
+    glm::mat4 nodeWorld = model->transform * node->getGlobalMatrix();
 
-            for (const Mesh* mesh : node->meshes)
-            {
-                // ✔ FIX: use mesh center instead of node origin
-                glm::vec3 meshCenterWorld =
-                    glm::vec3(M * glm::vec4(mesh->center, 1.0f));
+    // For each mesh on this node
+    for (const Mesh* mesh : node->meshes) {
+        const Material* mat = materials[mesh->materialIndex];
 
-                float dist = glm::length(meshCenterWorld - camPos);
+        // World-space center of the mesh
+        glm::vec3 centerWorld =
+            glm::vec3(nodeWorld * glm::vec4(mesh->center, 1.0f));
 
-                bool isTransparent = false;
+        // World-space distance to camera
+        float dist = glm::length(centerWorld - camPos);
 
-                if (mesh->materialIndex >= 0 &&
-                    mesh->materialIndex < (int)materials.size())
-                {
-                    const Material* mat = materials[mesh->materialIndex];
+        // Transparent if glTF alphaMode == "BLEND" or has transmission
+        bool isTransparent =
+            (mat->alphaMode == "BLEND") ||
+            (mat->transmissionFactor > 0.0f) ||
+            (mat->transmissionTextureIndex >= 0);
 
-                    // Alpha-based transparency
-                    if (mat->alphaMode == "BLEND")
-                        isTransparent = true;
-                    else if (mat->alphaMode == "MASK")
-                        isTransparent = false;
-                    else if (mat->baseColorFactor.a < 1.0f)
-                        isTransparent = true;
+        DrawItem item{};
+        item.model = model;
+        item.node = node;
+        item.mesh = mesh;
+        item.distanceToCamera = dist;
+        item.transparent = isTransparent;
 
-                    // Transmission-based transparency
-                    bool isTransmissive =
-                        (mat->transmissionFactor > 0.0f) ||
-                        (mat->transmissionTextureIndex >= 0);
+        outItems.push_back(item);
+    }
 
-                    if (isTransmissive)
-                        isTransparent = true;
-                }
-
-                out.push_back({
-                    .node = node,
-                    .mesh = mesh,
-                    .model = model,
-                    .distanceToCamera = dist,
-                    .transparent = isTransparent
-                    });
-            }
-
-            for (const Node* child : node->children)
-                recurse(child);
-        };
-
-    recurse(root);
+    // Recurse children
+    for (const Node* child : node->children) {
+        gatherDrawItems(child, camPos, materials, model, outItems);
+    }
 }

@@ -1,5 +1,6 @@
 #pragma once
 #include "core/math.h"
+struct State;
 struct Node;
 struct Mesh;
 struct Material;
@@ -13,8 +14,9 @@ struct DrawItem {
 	bool transparent;
 };
 
-void gatherDrawItems(const Node* root,
+void gatherDrawItems(
+	const Node* node,
 	const glm::vec3& camPos,
 	const std::vector<Material*>& materials,
 	Model* model,
-	std::vector<DrawItem>& out);
+	std::vector<DrawItem>& outItems);

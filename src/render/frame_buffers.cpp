@@ -6,19 +6,19 @@
 #include "core/context.h"
 #include "resources/buffers.h"
 #include "core/state.h"
-void frameBuffersCreate(State* state) {
+void opaqueFrameBuffersCreate(State* state) {
     uint32_t frameBufferCount = state->window.swapchain.imageCount;
     state->window.framebufferResized = false;
 
-    state->buffers->framebuffers =
+    state->buffers->opaqueFramebuffers =
         (VkFramebuffer*)malloc(frameBufferCount * sizeof(VkFramebuffer));
-    PANIC(!state->buffers->framebuffers,
+    PANIC(!state->buffers->opaqueFramebuffers,
         "Failed To Allocate Framebuffer Array Memory");
 
     for (uint32_t i = 0; i < frameBufferCount; i++) {
         VkFramebufferCreateInfo framebufferInfo{};
         framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-        framebufferInfo.renderPass = state->renderer->renderPass;
+        framebufferInfo.renderPass = state->renderer->opaqueRenderPass;
         framebufferInfo.width = state->window.swapchain.imageExtent.width;
         framebufferInfo.height = state->window.swapchain.imageExtent.height;
         framebufferInfo.layers = 1;
@@ -26,9 +26,10 @@ void frameBuffersCreate(State* state) {
         if (state->config->msaaSamples == VK_SAMPLE_COUNT_1_BIT) {
             // No MSAA: color = swapchain, depth = depth
             std::array<VkImageView, 2> attachments = {
-                state->window.swapchain.imageViews[i], // color
-                state->texture->depthImageView         // depth
+                state->texture->sceneColorImageView, // color (offscreen)
+                state->texture->singleDepthImageView       // depth
             };
+
 
             framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
             framebufferInfo.pAttachments = attachments.data();
@@ -36,13 +37,13 @@ void frameBuffersCreate(State* state) {
             PANIC(vkCreateFramebuffer(state->context->device,
                 &framebufferInfo,
                 nullptr,
-                &state->buffers->framebuffers[i]),
+                &state->buffers->opaqueFramebuffers[i]),
                 "Failed To Create Framebuffer");
         }
         else {
             std::array<VkImageView, 3> attachments = {
               state->texture->colorImageView,        // MSAA color
-              state->texture->depthImageView,        // depth
+              state->texture->msaaDepthImageView,    // depth
               state->texture->sceneColorImageView    // resolve → sampleable image ✔
             };
 
@@ -53,18 +54,59 @@ void frameBuffersCreate(State* state) {
             PANIC(vkCreateFramebuffer(state->context->device,
                 &framebufferInfo,
                 nullptr,
-                &state->buffers->framebuffers[i]),
+                &state->buffers->opaqueFramebuffers[i]),
                 "Failed To Create Framebuffer");
         }
     }
 }
-void frameBuffersDestroy(State* state) {
+void opaqueFrameBuffersDestroy(State* state) {
 	uint32_t frameBufferCount = state->window.swapchain.imageCount;
 	for (int i = 0; i < (int)frameBufferCount; i++) {
-		vkDestroyFramebuffer(state->context->device, state->buffers->framebuffers[i], nullptr);
+		vkDestroyFramebuffer(state->context->device, state->buffers->opaqueFramebuffers[i], nullptr);
 
 	};
 };
+
+void transparentFrameBuffersCreate(State* state)
+{
+    uint32_t frameBufferCount = state->window.swapchain.imageCount;
+
+    state->buffers->transparencyFramebuffers =
+        (VkFramebuffer*)malloc(frameBufferCount * sizeof(VkFramebuffer));
+    PANIC(!state->buffers->transparencyFramebuffers,
+        "Failed to allocate transparent framebuffer array");
+
+    for (uint32_t i = 0; i < frameBufferCount; ++i) {
+        VkFramebufferCreateInfo fb{};
+        fb.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+        fb.renderPass = state->renderer->transparencyRenderPass;
+        fb.width = state->window.swapchain.imageExtent.width;
+        fb.height = state->window.swapchain.imageExtent.height;
+        fb.layers = 1;
+
+        std::array<VkImageView, 2> attachments = {
+            state->texture->sceneColorImageView, // color (offscreen)
+            state->texture->singleDepthImageView       // depth
+        };
+
+        fb.attachmentCount = static_cast<uint32_t>(attachments.size());
+        fb.pAttachments = attachments.data();
+
+        PANIC(
+            vkCreateFramebuffer(state->context->device, &fb, nullptr,
+                &state->buffers->transparencyFramebuffers[i]),
+            "Failed to create transparent framebuffer"
+        );
+    }
+}
+void transparentFrameBuffersDestroy(State* state)
+{
+    uint32_t frameBufferCount = state->window.swapchain.imageCount;
+    for (int i = 0; i < (int)frameBufferCount; i++) {
+        vkDestroyFramebuffer(state->context->device, state->buffers->transparencyFramebuffers[i], nullptr);
+
+    };
+}
 
 void presentFramebuffersCreate(State* state) {
     uint32_t count = state->window.swapchain.imageCount;

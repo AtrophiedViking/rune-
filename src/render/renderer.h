@@ -16,6 +16,8 @@ struct Renderer {
 	//Sorting
 	std::vector<DrawItem*> opaqueDrawItems;
 	std::vector<DrawItem*> transparentDrawItems;
+	std::vector<MaterialGPU> materialsGPU;
+	std::vector<MeshGPU> meshesGPU;
 
 	uint32_t imageAquiredIndex;
 	VkSemaphore* imageAvailableSemaphore;
@@ -35,21 +37,25 @@ struct Renderer {
 	//Shaders
 	VkShaderModule vertShaderModule;
 	VkShaderModule fragShaderModule;
+	VkShaderModule opaqueFragShaderModule;
 	VkShaderModule presentFragShaderModule;
 	VkShaderModule presentVertShaderModule;
 
-	//graphicsPipeline
-	VkPipeline graphicsPipeline;
-	VkDescriptorPool descriptorPool;
-	VkPipelineLayout pipelineLayout;
-	VkRenderPass renderPass;
 	VkCommandPool commandPool;
-	//transparencyPipeline
+
+	//opaque Pipeline
+	VkPipeline opaquePipeline;
+	VkPipelineLayout opaquePipelineLayout;
+	VkRenderPass opaqueRenderPass;
+	VkDescriptorPool opaqueDescriptorPool;
+
+	//transparency Pipeline
 	VkPipeline transparencyPipeline;
 	VkDescriptorPool transparencyDescriptorPool;
 	VkPipelineLayout transparencyPipelineLayout;
 	VkRenderPass transparencyRenderPass;
 
+	//present Pipeline
 	VkPipeline presentPipeline;
 	VkDescriptorSetLayout presentSetLayout;
 	VkDescriptorSet presentSet;
@@ -57,8 +63,10 @@ struct Renderer {
 	VkPipelineLayout presentPipelineLayout;
 	VkRenderPass presentRenderPass;
 
-	std::vector<MaterialGPU> materialsGPU;
-	std::vector<MeshGPU> meshesGPU;
 };
 
-void drawMesh(State* state, VkCommandBuffer cmd, const Mesh* mesh, const glm::mat4& nodeMatrix, const glm::mat4& modelTransform);
+void drawMesh(State* state, VkCommandBuffer cmd,
+	const Mesh* mesh,
+	const glm::mat4& nodeMatrix,
+	const glm::mat4& modelTransform,
+	VkPipelineLayout layout);

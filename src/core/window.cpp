@@ -13,7 +13,7 @@
 #include "core/input.h"
 #include "gui/gui.h"
 #include "core/state.h"
-
+#include <iostream>
 //Error Handlin
 void logPrint() {
 	uint32_t instanceApiVersion;
@@ -99,6 +99,7 @@ void frameDraw(State* state) {
 		return;
 	}
 	else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
+		std::cerr << "vkAcquireNextImageKHR failed, result = " << result << std::endl;
 		throw std::runtime_error("failed to present swap chain image!");
 	}
 	vkResetFences(state->context->device, 1, &state->renderer->inFlightFence[state->renderer->frameIndex]);
