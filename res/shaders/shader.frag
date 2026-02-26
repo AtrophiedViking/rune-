@@ -373,7 +373,7 @@ void main()
     //float alpha = baseColor.a * (1.0 - transmission);
     
     // or, if you want to ignore baseColor.a for transmission:
-    float alpha = baseColor.a * (1.0 - (transmission/2));
+    float alpha = baseColor.a * (1.0 - (transmission));
 
 
     // discard fully transparent
@@ -384,4 +384,6 @@ void main()
     // WBOIT outputs
     outAccum  = vec4(color * alpha, alpha); // rgb premultiplied, a = weight
     outReveal = 1.0 - alpha;
+
+
 }

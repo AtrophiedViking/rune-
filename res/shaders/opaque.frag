@@ -358,6 +358,6 @@ void main()
     color = vec3(1.0) - exp(-color * ubo.exposure);
     color = pow(color, vec3(1.0 / ubo.gamma));
 
-    float alpha = 1.0;
+    float alpha = baseColor.a;
     outColor = vec4(color, alpha);
 }

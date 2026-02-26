@@ -13,8 +13,8 @@ Config config
 			.backgroundColor = {0.04f,0.015f,0.04f},
 			.msaaSamples = VK_SAMPLE_COUNT_1_BIT,
 			.DEFAULT_TEXTURE_PATH = "./res/textures/default_texture.ktx2",
-			.KOBOLD_MODEL_PATH = "./res/models/Kobold.glb",
-			.HOVER_BIKE_MODEL_PATH = "./res/models/DragonDispersion.glb",
+			.KOBOLD_MODEL_PATH = "./res/models/CompareAlphaCoverage.glb",
+			.HOVER_BIKE_MODEL_PATH = "./res/models/DragonAttenuation.glb",
 			.MODEL_PATH = "./res/models/MosquitoInAmber.glb",
 };
 
