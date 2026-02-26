@@ -43,7 +43,7 @@ void physicalDeviceSelect(State* state) {
 	for (const auto& device : devices) {
 		if (deviceSuitabilityCheck(device)) {
 			state->context->physicalDevice = device;
-			state->config->msaaSamples = getMaxUsableSampleCount(state);
+			//state->config->msaaSamples = getMaxUsableSampleCount(state);
 			break;
 		};
 	};

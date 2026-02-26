@@ -62,7 +62,13 @@ void init(State *state) {
 	sceneColorResourceCreate(state);
 	presentSamplerCreate(state);
 
+
+
+	printf("Opaque depth image:      %p\n", (void*)state->texture->msaaDepthImage);
+	printf("Opaque depth image view: %p\n", (void*)state->texture->msaaDepthImageView);
 	opaqueFrameBuffersCreate(state);
+	printf("Transparent depth image:      %p\n", (void*)state->texture->singleDepthImage);
+	printf("Transparent depth image view: %p\n", (void*)state->texture->singleDepthImageView);
 	transparentFrameBuffersCreate(state);
 	presentFramebuffersCreate(state);
 	callbackSetup(state);

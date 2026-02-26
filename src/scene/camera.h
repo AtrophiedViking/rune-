@@ -18,11 +18,12 @@ struct Camera {
 	glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);        // Y-axis as world up
 	float yaw = 0.0f;                                 // Look along negative Z-axis (OpenGL convention)
 	float pitch = 0.0f;
-	float zoom = (85.0f);
+	float zoom = (100.0f);
 
 	float viewDistance = 100;
-	float movementSpeed = 1;
-	float mouseSensitivity = 0.1f;
+	float nearClip = 0.0;
+	float movementSpeed = 1.5f;
+	float mouseSensitivity = 0.2f;
 
 	bool lookMode;
 

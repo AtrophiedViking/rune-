@@ -76,11 +76,17 @@ void transparentFrameBuffersCreate(State* state)
     PANIC(!state->buffers->transparencyFramebuffers,
         "Failed to allocate transparent framebuffer array");
 
+    // Choose depth view based on MSAA
+    VkImageView depthView =
+        (state->config->msaaSamples == VK_SAMPLE_COUNT_1_BIT)
+        ? state->texture->singleDepthImageView   // no MSAA
+        : state->texture->msaaDepthImageView;    // MSAA depth (same as opaque)
+
     for (uint32_t i = 0; i < count; ++i) {
         std::array<VkImageView, 3> attachments = {
-            state->texture->transAccumImageView,   // 0
-            state->texture->transRevealImageView,  // 1
-            state->texture->singleDepthImageView   // 2
+            state->texture->transAccumImageView,  // 0
+            state->texture->transRevealImageView, // 1
+            depthView                             // 2 (shared with opaque)
         };
 
         VkFramebufferCreateInfo fb{};
@@ -97,6 +103,7 @@ void transparentFrameBuffersCreate(State* state)
             "Failed to create transparent framebuffer");
     }
 }
+
 
 void transparentFrameBuffersDestroy(State* state)
 {
