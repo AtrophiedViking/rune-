@@ -363,7 +363,7 @@ void createMaterialDescriptorSets(State* state)
 	}
 }
 void presentSetLayoutCreate(State* state) {
-	VkDescriptorSetLayoutBinding sceneColorBinding{
+	VkDescriptorSetLayoutBinding sceneBinding{
 		.binding = 0,
 		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 		.descriptorCount = 1,
@@ -371,50 +371,109 @@ void presentSetLayoutCreate(State* state) {
 		.pImmutableSamplers = nullptr,
 	};
 
-	VkDescriptorSetLayoutCreateInfo layoutInfo{
-		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-		.bindingCount = 1,
-		.pBindings = &sceneColorBinding,
+	VkDescriptorSetLayoutBinding accumBinding{
+		.binding = 1,
+		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+		.pImmutableSamplers = nullptr,
 	};
 
-	PANIC(vkCreateDescriptorSetLayout(state->context->device,
-		&layoutInfo,
-		nullptr,
-		&state->renderer->presentSetLayout),
-		"Failed To Create Present Descriptor Set Layout");
+	VkDescriptorSetLayoutBinding revealBinding{
+		.binding = 2,
+		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+		.pImmutableSamplers = nullptr,
+	};
+
+	std::array<VkDescriptorSetLayoutBinding, 3> bindings{
+		sceneBinding, accumBinding, revealBinding
+	};
+
+	VkDescriptorSetLayoutCreateInfo layoutInfo{
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+		.bindingCount = static_cast<uint32_t>(bindings.size()),
+		.pBindings = bindings.data(),
+	};
+
+	PANIC(
+		vkCreateDescriptorSetLayout(
+			state->context->device,
+			&layoutInfo,
+			nullptr,
+			&state->renderer->presentSetLayout),
+		"Failed To Create Present Descriptor Set Layout"
+	);
 }
 void presentDescriptorSetAllocate(State* state) {
 	VkDescriptorSetLayout layout = state->renderer->presentSetLayout;
 
 	VkDescriptorSetAllocateInfo allocInfo{
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-		.descriptorPool = state->renderer->opaqueDescriptorPool, // or whatever pool you use
+		.descriptorPool = state->renderer->opaqueDescriptorPool, // ✔ your pool
 		.descriptorSetCount = 1,
 		.pSetLayouts = &layout,
 	};
 
-	PANIC(vkAllocateDescriptorSets(state->context->device,
-		&allocInfo,
-		&state->renderer->presentSet),
-		"Failed To Allocate Present Descriptor Set");
+	PANIC(
+		vkAllocateDescriptorSets(
+			state->context->device,
+			&allocInfo,
+			&state->renderer->presentSet
+		),
+		"Failed To Allocate Present Descriptor Set"
+	);
 }
 void presentDescriptorSetUpdate(State* state) {
-	VkDescriptorImageInfo imgInfo{
+	VkDescriptorImageInfo sceneInfo{
 		.sampler = state->texture->sceneColorSampler,
 		.imageView = state->texture->sceneColorImageView,
 		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 	};
 
-	VkWriteDescriptorSet write{
-		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-		.dstSet = state->renderer->presentSet,
-		.dstBinding = 0,
-		.descriptorCount = 1,
-		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-		.pImageInfo = &imgInfo,
+	VkDescriptorImageInfo accumInfo{
+		.sampler = state->texture->sceneColorSampler, // reuse sampler
+		.imageView = state->texture->transAccumImageView,
+		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 	};
 
-	vkUpdateDescriptorSets(state->context->device, 1, &write, 0, nullptr);
+	VkDescriptorImageInfo revealInfo{
+		.sampler = state->texture->sceneColorSampler, // reuse sampler
+		.imageView = state->texture->transRevealImageView,
+		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+	};
+
+	std::array<VkWriteDescriptorSet, 3> writes{};
+
+	writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	writes[0].dstSet = state->renderer->presentSet;
+	writes[0].dstBinding = 0;
+	writes[0].descriptorCount = 1;
+	writes[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	writes[0].pImageInfo = &sceneInfo;
+
+	writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	writes[1].dstSet = state->renderer->presentSet;
+	writes[1].dstBinding = 1;
+	writes[1].descriptorCount = 1;
+	writes[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	writes[1].pImageInfo = &accumInfo;
+
+	writes[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	writes[2].dstSet = state->renderer->presentSet;
+	writes[2].dstBinding = 2;
+	writes[2].descriptorCount = 1;
+	writes[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	writes[2].pImageInfo = &revealInfo;
+
+	vkUpdateDescriptorSets(
+		state->context->device,
+		static_cast<uint32_t>(writes.size()),
+		writes.data(),
+		0,
+		nullptr
+	);
 }
 void presentSamplerCreate(State* state) {
 	VkSamplerCreateInfo samplerInfo{
@@ -436,21 +495,26 @@ void presentSamplerCreate(State* state) {
 		.unnormalizedCoordinates = VK_FALSE,
 	};
 
-	PANIC(vkCreateSampler(state->context->device,
-		&samplerInfo,
-		nullptr,
-		&state->texture->sceneColorSampler),
-		"Failed To Create Present Sampler");
+	PANIC(
+		vkCreateSampler(
+			state->context->device,
+			&samplerInfo,
+			nullptr,
+			&state->texture->sceneColorSampler
+		),
+		"Failed To Create Present Sampler"
+	);
 }
 void destroySceneColorSampler(State* state) {
 	if (state->texture->sceneColorSampler != VK_NULL_HANDLE) {
-		vkDestroySampler(state->context->device,
+		vkDestroySampler(
+			state->context->device,
 			state->texture->sceneColorSampler,
-			nullptr);
+			nullptr
+		);
 		state->texture->sceneColorSampler = VK_NULL_HANDLE;
 	}
 }
-
 
 void uniformBuffersCreate(State* state) {
 	// One global UBO per frame in flight

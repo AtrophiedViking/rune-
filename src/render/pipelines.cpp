@@ -287,25 +287,42 @@ void transparencyPipelineCreate(State* state) {
 		.sampleShadingEnable = VK_FALSE,
 	};
 
-	// Color blending (alpha blending)
-	VkPipelineColorBlendAttachmentState colorBlendAttachment{
-		.blendEnable = VK_TRUE,
-		.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
-		.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
-		.colorBlendOp = VK_BLEND_OP_ADD,
-		.srcAlphaBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
-		.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
-		.alphaBlendOp = VK_BLEND_OP_ADD,
-		.colorWriteMask =	VK_COLOR_COMPONENT_R_BIT |
-							VK_COLOR_COMPONENT_G_BIT |
-							VK_COLOR_COMPONENT_B_BIT |
-							VK_COLOR_COMPONENT_A_BIT,
+	// attachment 0: accumulation
+	VkPipelineColorBlendAttachmentState accumBlend{};
+	accumBlend.blendEnable = VK_TRUE;
+	accumBlend.colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
+		VK_COLOR_COMPONENT_G_BIT |
+		VK_COLOR_COMPONENT_B_BIT |
+		VK_COLOR_COMPONENT_A_BIT;
+	// C_accum += vec4(color.rgb * alpha, alpha)
+	accumBlend.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+	accumBlend.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
+	accumBlend.colorBlendOp = VK_BLEND_OP_ADD;
+	accumBlend.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+	accumBlend.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+	accumBlend.alphaBlendOp = VK_BLEND_OP_ADD;
+
+	// attachment 1: revealage
+	VkPipelineColorBlendAttachmentState revealBlend{};
+	revealBlend.blendEnable = VK_TRUE;
+	revealBlend.colorWriteMask = VK_COLOR_COMPONENT_R_BIT;
+	// R_reveal *= (1 - alpha)
+	revealBlend.srcColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+	revealBlend.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+	revealBlend.colorBlendOp = VK_BLEND_OP_ADD;
+	revealBlend.srcAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+	revealBlend.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+	revealBlend.alphaBlendOp = VK_BLEND_OP_ADD;
+
+	std::array<VkPipelineColorBlendAttachmentState, 2> blendAttachments{
+		accumBlend, revealBlend
 	};
+
 	VkPipelineColorBlendStateCreateInfo colorBlending{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
 		.logicOpEnable = VK_FALSE,
-		.attachmentCount = 1,
-		.pAttachments = &colorBlendAttachment,
+		.attachmentCount = static_cast<uint32_t>(blendAttachments.size()),
+		.pAttachments = blendAttachments.data(),
 	};
 
 	// Depth: test on, write off
@@ -315,7 +332,7 @@ void transparencyPipelineCreate(State* state) {
 	depthStencil.depthWriteEnable = VK_FALSE;
 	depthStencil.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
 	depthStencil.depthBoundsTestEnable = VK_FALSE;
-	depthStencil.stencilTestEnable = VK_FALSE;
+	depthStencil.stencilTestEnable = VK_TRUE;
 
 
 	std::array<VkDescriptorSetLayout, 2> setLayouts = {

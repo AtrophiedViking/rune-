@@ -30,6 +30,9 @@ struct Renderer {
 	VkDescriptorSetLayout textureSetLayout;
 	std::vector<VkDescriptorSet> descriptorSets;
 
+	VkDescriptorSetLayout presentDescriptorSetLayout;
+	VkDescriptorSet presentDescriptorSet;
+
 	std::vector<VkBuffer> uniformBuffers;
 	std::vector<VkDeviceMemory> uniformBuffersMemory;
 	std::vector<void*> uniformBuffersMapped;

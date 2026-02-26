@@ -75,11 +75,9 @@ void commandBufferRecord(State* state)
 
     vkBeginCommandBuffer(cmd, &beginInfo);
 
-
-
     VkViewport viewport{
         .x = 0.f, .y = 0.f,
-        .width = (float)state->window.swapchain.imageExtent.width,
+        .width  = (float)state->window.swapchain.imageExtent.width,
         .height = (float)state->window.swapchain.imageExtent.height,
         .minDepth = 0.f, .maxDepth = 1.0f
     };
@@ -119,7 +117,7 @@ void commandBufferRecord(State* state)
     // PASS 1: OPAQUE (MSAA COLOR + MSAA DEPTH)
     // ─────────────────────────────────────────────
     std::array<VkClearValue, 2> clearValues{};
-    clearValues[0].color = { state->config->backgroundColor.color };
+    clearValues[0].color        = { state->config->backgroundColor.color };
     clearValues[1].depthStencil = { 1.0f, 0 };
 
     VkRenderPassBeginInfo opaqueInfo{
@@ -149,7 +147,6 @@ void commandBufferRecord(State* state)
     for (auto& item : opaqueItems)
     {
         if (item.transparent) {
-            // This should NEVER happen
             printf("ERROR: transparent item in opaque pass (mesh %p)\n", (void*)item.mesh);
         }
 
@@ -165,96 +162,99 @@ void commandBufferRecord(State* state)
     vkCmdEndRenderPass(cmd);
 
     // ─────────────────────────────────────────────
-    // DEPTH BLIT: MSAA → SINGLE SAMPLE
+    // DEPTH BLIT: MSAA → SINGLE SAMPLE (only if MSAA enabled)
     // ─────────────────────────────────────────────
+    if (state->config->msaaSamples != VK_SAMPLE_COUNT_1_BIT) {
+        VkImageMemoryBarrier msaaToSrc{
+            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+            .srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+            .dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
+            .oldLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+            .newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            .image = state->texture->msaaDepthImage,
+            .subresourceRange = {VK_IMAGE_ASPECT_DEPTH_BIT,0,1,0,1}
+        };
 
-    // MSAA depth → TRANSFER_SRC
-    VkImageMemoryBarrier msaaToSrc{
-        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-        .dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
-        .oldLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-        .newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        .image = state->texture->msaaDepthImage,
-        .subresourceRange = {VK_IMAGE_ASPECT_DEPTH_BIT,0,1,0,1}
-    };
+        vkCmdPipelineBarrier(
+            cmd,
+            VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+            VK_PIPELINE_STAGE_TRANSFER_BIT,
+            0, 0, nullptr, 0, nullptr,
+            1, &msaaToSrc
+        );
 
-    vkCmdPipelineBarrier(
-        cmd,
-        VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-        VK_PIPELINE_STAGE_TRANSFER_BIT,
-        0, 0, nullptr, 0, nullptr,
-        1, &msaaToSrc
-    );
+        VkImageMemoryBarrier singleToDst{
+            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+            .srcAccessMask = 0,
+            .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+            .oldLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+            .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            .image = state->texture->singleDepthImage,
+            .subresourceRange = {VK_IMAGE_ASPECT_DEPTH_BIT,0,1,0,1}
+        };
 
-    // single depth → TRANSFER_DST
-    VkImageMemoryBarrier singleToDst{
-        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .srcAccessMask = 0,
-        .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
-        .oldLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-        .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        .image = state->texture->singleDepthImage,
-        .subresourceRange = {VK_IMAGE_ASPECT_DEPTH_BIT,0,1,0,1}
-    };
+        vkCmdPipelineBarrier(
+            cmd,
+            VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+            VK_PIPELINE_STAGE_TRANSFER_BIT,
+            0, 0, nullptr, 0, nullptr,
+            1, &singleToDst
+        );
 
-    vkCmdPipelineBarrier(
-        cmd,
-        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-        VK_PIPELINE_STAGE_TRANSFER_BIT,
-        0, 0, nullptr, 0, nullptr,
-        1, &singleToDst
-    );
+        VkImageBlit depthBlit{};
+        depthBlit.srcSubresource = { VK_IMAGE_ASPECT_DEPTH_BIT,0,0,1 };
+        depthBlit.dstSubresource = { VK_IMAGE_ASPECT_DEPTH_BIT,0,0,1 };
+        depthBlit.srcOffsets[1] = {
+            (int32_t)state->window.swapchain.imageExtent.width,
+            (int32_t)state->window.swapchain.imageExtent.height,
+            1
+        };
+        depthBlit.dstOffsets[1] = depthBlit.srcOffsets[1];
 
-    // Blit depth
-    VkImageBlit depthBlit{};
-    depthBlit.srcSubresource = { VK_IMAGE_ASPECT_DEPTH_BIT,0,0,1 };
-    depthBlit.dstSubresource = { VK_IMAGE_ASPECT_DEPTH_BIT,0,0,1 };
-    depthBlit.srcOffsets[1] = {
-        (int32_t)state->window.swapchain.imageExtent.width,
-        (int32_t)state->window.swapchain.imageExtent.height,
-        1
-    };
-    depthBlit.dstOffsets[1] = depthBlit.srcOffsets[1];
+        vkCmdBlitImage(
+            cmd,
+            state->texture->msaaDepthImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            state->texture->singleDepthImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            1, &depthBlit,
+            VK_FILTER_NEAREST
+        );
 
-    vkCmdBlitImage(
-        cmd,
-        state->texture->msaaDepthImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        state->texture->singleDepthImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        1, &depthBlit,
-        VK_FILTER_NEAREST
-    );
+        VkImageMemoryBarrier depthToAttachment{
+            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+            .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+            .dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
+            .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            .newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+            .image = state->texture->singleDepthImage,
+            .subresourceRange = {VK_IMAGE_ASPECT_DEPTH_BIT,0,1,0,1}
+        };
 
-    // single depth → ATTACHMENT
-    VkImageMemoryBarrier depthToAttachment{
-        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
-        .dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
-        .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        .newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-        .image = state->texture->singleDepthImage,
-        .subresourceRange = {VK_IMAGE_ASPECT_DEPTH_BIT,0,1,0,1}
-    };
+        vkCmdPipelineBarrier(
+            cmd,
+            VK_PIPELINE_STAGE_TRANSFER_BIT,
+            VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+            0, 0, nullptr, 0, nullptr,
+            1, &depthToAttachment
+        );
+    }
 
-    vkCmdPipelineBarrier(
-        cmd,
-        VK_PIPELINE_STAGE_TRANSFER_BIT,
-        VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
-        0, 0, nullptr, 0, nullptr,
-        1, &depthToAttachment
-    );
 
     // ─────────────────────────────────────────────
-    // PASS 2: TRANSPARENT (LOAD COLOR + LOAD DEPTH)
+    // PASS 2: TRANSPARENT (CLEAR ACCUM/REVEAL + LOAD DEPTH)
     // ─────────────────────────────────────────────
+
+    std::array<VkClearValue, 3> transClears{};
+    transClears[0].color = { { 0.0f, 0.0f, 0.0f, 0.0f } }; // accum = 0
+    transClears[1].color = { { 1.0f, 0.0f, 0.0f, 0.0f } }; // reveal = 1
+    transClears[2].depthStencil = { 1.0f, 0 };             // depth (LOAD, but clear value unused)
 
     VkRenderPassBeginInfo transInfo{
-        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-        .renderPass = state->renderer->transparencyRenderPass,
-        .framebuffer = state->buffers->transparencyFramebuffers[state->renderer->imageAquiredIndex],
-        .renderArea = {{0,0}, state->window.swapchain.imageExtent},
-        .clearValueCount = 0,
-        .pClearValues = nullptr,
+     .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+     .renderPass = state->renderer->transparencyRenderPass,
+     .framebuffer = state->buffers->transparencyFramebuffers[state->renderer->imageAquiredIndex],
+     .renderArea = {{0,0}, state->window.swapchain.imageExtent},
+     .clearValueCount = 3,              // only color attachments are cleared
+     .pClearValues = transClears.data(),
     };
 
     vkCmdBeginRenderPass(cmd, &transInfo, VK_SUBPASS_CONTENTS_INLINE);
@@ -269,7 +269,6 @@ void commandBufferRecord(State* state)
         0, nullptr
     );
 
-    // Sort back-to-front
     std::sort(
         transparentItems.begin(),
         transparentItems.end(),
@@ -294,9 +293,8 @@ void commandBufferRecord(State* state)
     // ─────────────────────────────────────────────
     // PASS 3: PRESENT
     // ─────────────────────────────────────────────
-    std::array<VkClearValue, 2> presentClearValues{};
+    std::array<VkClearValue, 1> presentClearValues{};
     presentClearValues[0].color = { state->config->backgroundColor.color };
-    presentClearValues[1].depthStencil = { 1.0f, 0 };
 
     VkRenderPassBeginInfo presentInfo{
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,

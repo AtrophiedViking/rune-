@@ -28,10 +28,13 @@ void gatherDrawItems(
         float dist = glm::length(centerWorld - camPos);
 
         // Transparent if glTF alphaMode == "BLEND" or has transmission
-        bool isTransparent =
-            (mat->alphaMode == "BLEND") ||
+        bool hasTransmission =
             (mat->transmissionFactor > 0.0f) ||
             (mat->transmissionTextureIndex >= 0);
+
+        bool isTransparent =
+            (mat->alphaMode == "BLEND") ||
+            hasTransmission;
 
         DrawItem item{};
         item.model = model;

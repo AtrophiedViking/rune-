@@ -152,48 +152,56 @@ void opaqueRenderPassDestroy(State* state) {
 
 void transparentRenderPassCreate(State* state)
 {
-    // Color: sceneColor (single-sample)
-    VkAttachmentDescription colorAttachment{};
-    colorAttachment.format = state->window.swapchain.format;
-    colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
-    colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;   // keep opaque result
-    colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    colorAttachment.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;   // matches opaque’s final
-    colorAttachment.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;   // ready for present pass sampling
+    // 0: accumulation
+    VkAttachmentDescription accum{};
+    accum.format = VK_FORMAT_R16G16B16A16_SFLOAT;
+    accum.samples = VK_SAMPLE_COUNT_1_BIT;
+    accum.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    accum.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    accum.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    accum.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    accum.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    accum.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-    VkAttachmentReference colorRef{
-        .attachment = 0,
-        .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-    };
+    // 1: revealage
+    VkAttachmentDescription reveal{};
+    reveal.format = VK_FORMAT_R8_UNORM;
+    reveal.samples = VK_SAMPLE_COUNT_1_BIT;
+    reveal.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    reveal.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    reveal.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    reveal.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    reveal.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    reveal.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-    // Depth: same depth buffer, read-only
-    VkAttachmentDescription depthAttachment{};
-    depthAttachment.format = findDepthFormat(state);
-    depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
-    depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;   // keep opaque depth
-    depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    depthAttachment.initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-    depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    // 2: depth (same as before)
+    VkAttachmentDescription depth{};
+    depth.format = findDepthFormat(state);
+    depth.samples = VK_SAMPLE_COUNT_1_BIT;
+    depth.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;   // keep opaque depth
+    depth.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    depth.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    depth.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    depth.initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    depth.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
-    VkAttachmentReference depthRef{
-        .attachment = 1,
-        .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-    };
+    VkAttachmentReference colorRefs[2];
+    colorRefs[0].attachment = 0;
+    colorRefs[0].layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    colorRefs[1].attachment = 1;
+    colorRefs[1].layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+    VkAttachmentReference depthRef{};
+    depthRef.attachment = 2;
+    depthRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
     VkSubpassDescription subpass{};
     subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-    subpass.colorAttachmentCount = 1;
-    subpass.pColorAttachments = &colorRef;
+    subpass.colorAttachmentCount = 2;
+    subpass.pColorAttachments = colorRefs;
     subpass.pDepthStencilAttachment = &depthRef;
 
-    std::array<VkAttachmentDescription, 2> attachments{
-        colorAttachment,
-        depthAttachment
-    };
+    std::array<VkAttachmentDescription, 3> attachments{ accum, reveal, depth };
 
     VkSubpassDependency dep{};
     dep.srcSubpass = VK_SUBPASS_EXTERNAL;
@@ -216,11 +224,9 @@ void transparentRenderPassCreate(State* state)
     info.dependencyCount = 1;
     info.pDependencies = &dep;
 
-    PANIC(
-        vkCreateRenderPass(state->context->device, &info, nullptr,
-            &state->renderer->transparencyRenderPass),
-        "Failed to create transparent render pass"
-    );
+    PANIC(vkCreateRenderPass(state->context->device, &info, nullptr,
+        &state->renderer->transparencyRenderPass),
+        "Failed to create transparent render pass");
 }
 void transparentRenderPassDestroy(State* state) {
     vkDestroyRenderPass(state->context->device, state->renderer->transparencyRenderPass, nullptr);
@@ -279,49 +285,116 @@ void colorResourceDestroy(State* state) {
 	vkFreeMemory(state->context->device, state->texture->colorImageMemory, nullptr);
 };
 
-void sceneColorResourceCreate(State* state) {
-	VkFormat colorFormat = state->window.swapchain.format;
+void sceneColorResourceCreate(State* state)
+{
+    VkExtent2D extent = state->window.swapchain.imageExtent;
 
-	imageCreate(
-		state,
-		state->window.swapchain.imageExtent.width,
-		state->window.swapchain.imageExtent.height,
-		colorFormat,
-		VK_IMAGE_TILING_OPTIMAL,
-		// NOTE: no TRANSIENT, and we add SAMPLED
-		VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-		state->texture->sceneColorImage,
-		state->texture->sceneColorImageMemory,
-		1, // mipLevels
-		VK_SAMPLE_COUNT_1_BIT // single-sample
-	);
+    // Opaque scene color uses the swapchain format
+    VkFormat sceneColorFormat = state->window.swapchain.format;
 
-	state->texture->sceneColorImageView =
-		imageViewCreate(
-			state,
-			state->texture->sceneColorImage,
-			colorFormat,
-			VK_IMAGE_ASPECT_COLOR_BIT,
-			1
-		);
+    // Transparency targets: MUST match transparentRenderPass
+    VkFormat transAccumFormat = VK_FORMAT_R16G16B16A16_SFLOAT; // attachment 0
+    VkFormat transRevealFormat = VK_FORMAT_R8_UNORM;            // attachment 1
+
+    // Scene color (opaque pass target)
+    imageCreate(
+        state,
+        extent.width,
+        extent.height,
+        sceneColorFormat,
+        VK_IMAGE_TILING_OPTIMAL,
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        state->texture->sceneColorImage,
+        state->texture->sceneColorImageMemory,
+        1,
+        VK_SAMPLE_COUNT_1_BIT
+    );
+
+    state->texture->sceneColorImageView =
+        imageViewCreate(
+            state,
+            state->texture->sceneColorImage,
+            sceneColorFormat,
+            VK_IMAGE_ASPECT_COLOR_BIT,
+            1
+        );
+
+    // Transparency accum (matches transparentRenderPass attachment 0)
+    imageCreate(
+        state,
+        extent.width,
+        extent.height,
+        transAccumFormat,
+        VK_IMAGE_TILING_OPTIMAL,
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        state->texture->transAccumImage,
+        state->texture->transAccumImageMemory,
+        1,
+        VK_SAMPLE_COUNT_1_BIT
+    );
+
+    state->texture->transAccumImageView =
+        imageViewCreate(
+            state,
+            state->texture->transAccumImage,
+            transAccumFormat,
+            VK_IMAGE_ASPECT_COLOR_BIT,
+            1
+        );
+
+    // Transparency reveal (matches transparentRenderPass attachment 1)
+    imageCreate(
+        state,
+        extent.width,
+        extent.height,
+        transRevealFormat,
+        VK_IMAGE_TILING_OPTIMAL,
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        state->texture->transRevealImage,
+        state->texture->transRevealImageMemory,
+        1,
+        VK_SAMPLE_COUNT_1_BIT
+    );
+
+    state->texture->transRevealImageView =
+        imageViewCreate(
+            state,
+            state->texture->transRevealImage,
+            transRevealFormat,
+            VK_IMAGE_ASPECT_COLOR_BIT,
+            1
+        );
 }
+
+
 void sceneColorResourceDestroy(State* state) {
 	vkDestroyImageView(state->context->device, state->texture->sceneColorImageView, nullptr);
 	vkDestroyImage(state->context->device, state->texture->sceneColorImage, nullptr);
 	vkFreeMemory(state->context->device, state->texture->sceneColorImageMemory, nullptr);
+
+	vkDestroyImageView(state->context->device, state->texture->transAccumImageView, nullptr);
+	vkDestroyImage(state->context->device, state->texture->transAccumImage, nullptr);
+	vkFreeMemory(state->context->device, state->texture->transAccumImageMemory, nullptr);
+	
+    vkDestroyImageView(state->context->device, state->texture->transRevealImageView, nullptr);
+	vkDestroyImage(state->context->device, state->texture->transRevealImage, nullptr);
+	vkFreeMemory(state->context->device, state->texture->transRevealImageMemory, nullptr);
 };
 
 void depthResourceCreate(State* state) {
-	VkFormat depthFormat = findDepthFormat(state);
-	imageCreate(state, state->window.swapchain.imageExtent.width, state->window.swapchain.imageExtent.height, depthFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
+    VkFormat depthFormat = findDepthFormat(state);
+    imageCreate(state, state->window.swapchain.imageExtent.width, state->window.swapchain.imageExtent.height, depthFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
         VK_IMAGE_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, state->texture->msaaDepthImage, state->texture->msaaDepthImageMemory, 1, state->config->msaaSamples);
-	state->texture->msaaDepthImageView = imageViewCreate(state, state->texture->msaaDepthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
-	transitionImageLayout(state, state->texture->msaaDepthImage, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, 1);
+    state->texture->msaaDepthImageView = imageViewCreate(state, state->texture->msaaDepthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
+    transitionImageLayout(state, state->texture->msaaDepthImage, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, 1);
+
     imageCreate(state, state->window.swapchain.imageExtent.width, state->window.swapchain.imageExtent.height, depthFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, state->texture->singleDepthImage, state->texture->singleDepthImageMemory, 1, VK_SAMPLE_COUNT_1_BIT);
     state->texture->singleDepthImageView = imageViewCreate(state, state->texture->singleDepthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
     transitionImageLayout(state, state->texture->singleDepthImage, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, 1);
-};
+}
 void depthResourceDestroy(State* state) {
 	vkDestroyImageView(state->context->device, state->texture->msaaDepthImageView, nullptr);
 	vkDestroyImage(state->context->device, state->texture->msaaDepthImage, nullptr);

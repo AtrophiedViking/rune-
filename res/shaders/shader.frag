@@ -95,7 +95,8 @@ layout(location = 6) in vec3 fragBitangent;
 // ─────────────────────────────────────────────
 // Output
 // ─────────────────────────────────────────────
-layout(location = 0) out vec4 outColor;
+layout(location = 0) out vec4 outAccum;   // color * alpha, alpha
+layout(location = 1) out float outReveal; // revealage
 
 // ─────────────────────────────────────────────
 // Helpers
@@ -374,7 +375,13 @@ void main()
     // or, if you want to ignore baseColor.a for transmission:
     float alpha = baseColor.a * (1.0 - (transmission/2));
 
-    
-    outColor = vec4(color, alpha);
 
+    // discard fully transparent
+    if (alpha <= 0.0) {
+        discard;
+    }
+
+    // WBOIT outputs
+    outAccum  = vec4(color * alpha, alpha); // rgb premultiplied, a = weight
+    outReveal = 1.0 - alpha;
 }
