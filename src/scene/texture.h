@@ -27,6 +27,11 @@ struct Texture{
 	VkImageView textureImageView;
 	VkSampler textureSampler;
 
+	VkImage cubeImage;
+	VkDeviceMemory cubeImageMemory;
+	VkImageView cubeImageView;
+	VkSampler cubeSampler;
+
 	uint32_t mipLevels;
 
 	VkImage colorImage;
@@ -54,6 +59,10 @@ struct Texture{
 	VkImageView    sceneColorImageView;
 	VkSampler	   sceneColorSampler;
 
+	VkImage        sceneDepthImage;
+	VkDeviceMemory sceneDepthImageMemory;
+	VkImageView    sceneDepthImageView;
+	VkSampler	   sceneDepthSampler;
 
 	VkDescriptorSet descriptorSet;
 	VkFormat format;

@@ -20,6 +20,7 @@ struct MaterialGPU {
 	float thicknessFactor;
 	float attenuationDistance;
 	glm::vec4 attenuationColor;
+	float ior;
 };
 
 TexTransformGPU toGPU(const TextureTransform t);

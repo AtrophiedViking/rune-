@@ -78,3 +78,14 @@ void parseVolumeExtension(const tinygltf::Material& m, Material& mat, uint32_t b
         // Or create a dedicated Thickness role later
     }
 }
+void parseIorExtension(const tinygltf::Material& m, Material& mat)
+{
+    auto it = m.extensions.find("KHR_materials_ior");
+    if (it == m.extensions.end())
+        return;
+
+    const tinygltf::Value& ext = it->second;
+
+    if (ext.Has("ior"))
+        mat.ior = (float)ext.Get("ior").Get<double>();
+}

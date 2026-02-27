@@ -17,6 +17,7 @@ struct Config{
 	VkComponentMapping swapchainComponentsMapping;
 	VkClearValue backgroundColor;
 	VkSampleCountFlagBits msaaSamples;
+	const std::string DEFAULT_CUBEMAP;
 	const std::string DEFAULT_TEXTURE_PATH;
 	const std::string KOBOLD_MODEL_PATH;
 	const std::string HOVER_BIKE_MODEL_PATH;

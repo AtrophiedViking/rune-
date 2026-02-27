@@ -386,14 +386,17 @@ void sceneColorResourceDestroy(State* state) {
 
 void depthResourceCreate(State* state) {
     VkFormat depthFormat = findDepthFormat(state);
-    imageCreate(state, state->window.swapchain.imageExtent.width, state->window.swapchain.imageExtent.height, depthFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
-        VK_IMAGE_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, state->texture->msaaDepthImage, state->texture->msaaDepthImageMemory, 1, state->config->msaaSamples);
+    imageCreate(state, state->window.swapchain.imageExtent.width, state->window.swapchain.imageExtent.height, depthFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, state->texture->msaaDepthImage, state->texture->msaaDepthImageMemory, 1, state->config->msaaSamples);
     state->texture->msaaDepthImageView = imageViewCreate(state, state->texture->msaaDepthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
-    transitionImageLayout(state, state->texture->msaaDepthImage, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, 1);
+    transitionImageLayout(state, state->texture->msaaDepthImage, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, 1, 1);
 
     imageCreate(state, state->window.swapchain.imageExtent.width, state->window.swapchain.imageExtent.height, depthFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, state->texture->singleDepthImage, state->texture->singleDepthImageMemory, 1, VK_SAMPLE_COUNT_1_BIT);
     state->texture->singleDepthImageView = imageViewCreate(state, state->texture->singleDepthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
-    transitionImageLayout(state, state->texture->singleDepthImage, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, 1);
+    transitionImageLayout(state, state->texture->singleDepthImage, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, 1, 1);
+
+    imageCreate(state, state->window.swapchain.imageExtent.width, state->window.swapchain.imageExtent.height, depthFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, state->texture->sceneDepthImage, state->texture->sceneDepthImageMemory, 1, VK_SAMPLE_COUNT_1_BIT);
+    state->texture->sceneDepthImageView = imageViewCreate(state, state->texture->sceneDepthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
+    transitionImageLayout(state, state->texture->sceneDepthImage, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, 1);
 }
 void depthResourceDestroy(State* state) {
 	vkDestroyImageView(state->context->device, state->texture->msaaDepthImageView, nullptr);
@@ -403,4 +406,8 @@ void depthResourceDestroy(State* state) {
     vkDestroyImageView(state->context->device, state->texture->singleDepthImageView, nullptr);
 	vkDestroyImage(state->context->device, state->texture->singleDepthImage, nullptr);
 	vkFreeMemory(state->context->device, state->texture->singleDepthImageMemory, nullptr);
+
+    vkDestroyImageView(state->context->device, state->texture->sceneDepthImageView, nullptr);
+    vkDestroyImage(state->context->device, state->texture->sceneDepthImage, nullptr);
+    vkFreeMemory(state->context->device, state->texture->sceneDepthImageMemory, nullptr);
 };

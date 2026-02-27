@@ -68,22 +68,28 @@ void commandBufferGet(State* state) {
 
 void commandBufferRecord(State* state)
 {
-    VkCommandBuffer cmd = state->buffers->commandBuffer[state->renderer->frameIndex];
+    // ─────────────────────────────────────────────
+    // FRAME + IMAGE INDICES
+    // ─────────────────────────────────────────────
+    uint32_t frameIndex = state->renderer->frameIndex;
+    uint32_t imageIndex = state->renderer->imageAquiredIndex;
+
+    VkCommandBuffer cmd = state->buffers->commandBuffer[frameIndex];
 
     VkCommandBufferBeginInfo beginInfo{};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-
     vkBeginCommandBuffer(cmd, &beginInfo);
 
     VkViewport viewport{
         .x = 0.f, .y = 0.f,
-        .width  = (float)state->window.swapchain.imageExtent.width,
+        .width = (float)state->window.swapchain.imageExtent.width,
         .height = (float)state->window.swapchain.imageExtent.height,
-        .minDepth = state->scene->camera->nearClip, .maxDepth = state->scene->camera->viewDistance
+        .minDepth = state->scene->camera->nearClip,
+        .maxDepth = state->scene->camera->viewDistance
     };
 
     VkRect2D scissor{
-        .offset = {0,0},
+        .offset = {0, 0},
         .extent = state->window.swapchain.imageExtent
     };
 
@@ -114,16 +120,16 @@ void commandBufferRecord(State* state)
     }
 
     // ─────────────────────────────────────────────
-    // PASS 1: OPAQUE (MSAA COLOR + MSAA DEPTH)
+    // PASS 1: OPAQUE
     // ─────────────────────────────────────────────
     std::array<VkClearValue, 2> clearValues{};
-    clearValues[0].color        = { state->config->backgroundColor.color };
+    clearValues[0].color = { state->config->backgroundColor.color };
     clearValues[1].depthStencil = { 1.0f, 0 };
 
     VkRenderPassBeginInfo opaqueInfo{
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
         .renderPass = state->renderer->opaqueRenderPass,
-        .framebuffer = state->buffers->opaqueFramebuffers[state->renderer->imageAquiredIndex],
+        .framebuffer = state->buffers->opaqueFramebuffers[imageIndex],
         .renderArea = {{0,0}, state->window.swapchain.imageExtent},
         .clearValueCount = 2,
         .pClearValues = clearValues.data(),
@@ -133,12 +139,12 @@ void commandBufferRecord(State* state)
     vkCmdSetViewport(cmd, 0, 1, &viewport);
     vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-    // Global UBO
+    // 🔹 global set = 0
     vkCmdBindDescriptorSets(
         cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
         state->renderer->opaquePipelineLayout,
         0, 1,
-        &state->renderer->descriptorSets[state->renderer->frameIndex],
+        &state->renderer->globalSets[frameIndex],
         0, nullptr
     );
 
@@ -146,10 +152,6 @@ void commandBufferRecord(State* state)
 
     for (auto& item : opaqueItems)
     {
-        if (item.transparent) {
-            printf("ERROR: transparent item in opaque pass (mesh %p)\n", (void*)item.mesh);
-        }
-
         drawMesh(
             state, cmd,
             item.mesh,
@@ -161,35 +163,122 @@ void commandBufferRecord(State* state)
 
     vkCmdEndRenderPass(cmd);
 
-   
+    // ─────────────────────────────────────────────
+    // TRANSITION sceneColor FOR SAMPLING
+    // ─────────────────────────────────────────────
+    {
+        VkImageMemoryBarrier barrier{};
+        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        barrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.image = state->texture->sceneColorImage;
+
+        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        barrier.subresourceRange.baseMipLevel = 0;
+        barrier.subresourceRange.levelCount = 1;
+        barrier.subresourceRange.baseArrayLayer = 0;
+        barrier.subresourceRange.layerCount = 1;
+
+        barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+        vkCmdPipelineBarrier(
+            cmd,
+            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+            0,
+            0, nullptr,
+            0, nullptr,
+            1, &barrier
+        );
+    }
 
     // ─────────────────────────────────────────────
-    // PASS 2: TRANSPARENT (CLEAR ACCUM/REVEAL + LOAD DEPTH)
+    // RESOLVE DEPTH
     // ─────────────────────────────────────────────
+    VkImageResolve depthResolve{};
+    depthResolve.srcSubresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    depthResolve.srcSubresource.mipLevel = 0;
+    depthResolve.srcSubresource.baseArrayLayer = 0;
+    depthResolve.srcSubresource.layerCount = 1;
 
+    depthResolve.dstSubresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    depthResolve.dstSubresource.mipLevel = 0;
+    depthResolve.dstSubresource.baseArrayLayer = 0;
+    depthResolve.dstSubresource.layerCount = 1;
+
+    depthResolve.extent = {
+        state->window.swapchain.imageExtent.width,
+        state->window.swapchain.imageExtent.height,
+        1
+    };
+
+    vkCmdResolveImage(
+        cmd,
+        state->texture->msaaDepthImage,
+        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+        state->texture->sceneDepthImage,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        1,
+        &depthResolve
+    );
+
+    VkImageMemoryBarrier depthBarrier{};
+    depthBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    depthBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    depthBarrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    depthBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    depthBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    depthBarrier.image = state->texture->sceneDepthImage;
+
+    depthBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    depthBarrier.subresourceRange.baseMipLevel = 0;
+    depthBarrier.subresourceRange.levelCount = 1;
+    depthBarrier.subresourceRange.baseArrayLayer = 0;
+    depthBarrier.subresourceRange.layerCount = 1;
+
+    depthBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    depthBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+    vkCmdPipelineBarrier(
+        cmd,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+        0,
+        0, nullptr,
+        0, nullptr,
+        1, &depthBarrier
+    );
+
+    // ─────────────────────────────────────────────
+    // PASS 2: TRANSPARENT
+    // ─────────────────────────────────────────────
     std::array<VkClearValue, 3> transClears{};
-    transClears[0].color = { { 0.0f, 0.0f, 0.0f, 0.0f } }; // accum = 0
-    transClears[1].color = { { 1.0f, 0.0f, 0.0f, 0.0f } }; // reveal = 1
-    transClears[2].depthStencil = { 1.0f, 0 };             // depth (LOAD, but clear value unused)
+    transClears[0].color = { { 0.0f, 0.0f, 0.0f, 0.0f } };
+    transClears[1].color = { { 1.0f, 0.0f, 0.0f, 0.0f } };
+    transClears[2].depthStencil = { 1.0f, 0 };
 
     VkRenderPassBeginInfo transInfo{
-     .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-     .renderPass = state->renderer->transparencyRenderPass,
-     .framebuffer = state->buffers->transparencyFramebuffers[state->renderer->imageAquiredIndex],
-     .renderArea = {{0,0}, state->window.swapchain.imageExtent},
-     .clearValueCount = 3,              // only color attachments are cleared
-     .pClearValues = transClears.data(),
+        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+        .renderPass = state->renderer->transparencyRenderPass,
+        .framebuffer = state->buffers->transparencyFramebuffers[imageIndex],
+        .renderArea = {{0,0}, state->window.swapchain.imageExtent},
+        .clearValueCount = 3,
+        .pClearValues = transClears.data(),
     };
 
     vkCmdBeginRenderPass(cmd, &transInfo, VK_SUBPASS_CONTENTS_INLINE);
     vkCmdSetViewport(cmd, 0, 1, &viewport);
     vkCmdSetScissor(cmd, 0, 1, &scissor);
 
+    // 🔹 global set = 0
     vkCmdBindDescriptorSets(
         cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
         state->renderer->transparencyPipelineLayout,
         0, 1,
-        &state->renderer->descriptorSets[state->renderer->frameIndex],
+        &state->renderer->globalSets[frameIndex],
         0, nullptr
     );
 
@@ -223,7 +312,7 @@ void commandBufferRecord(State* state)
     VkRenderPassBeginInfo presentInfo{
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
         .renderPass = state->renderer->presentRenderPass,
-        .framebuffer = state->buffers->presentFramebuffers[state->renderer->imageAquiredIndex],
+        .framebuffer = state->buffers->presentFramebuffers[imageIndex],
         .renderArea = {{0,0}, state->window.swapchain.imageExtent},
         .clearValueCount = 1,
         .pClearValues = presentClearValues.data(),
@@ -235,6 +324,7 @@ void commandBufferRecord(State* state)
 
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, state->renderer->presentPipeline);
 
+    // 🔹 present set = 0
     vkCmdBindDescriptorSets(
         cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
         state->renderer->presentPipelineLayout,
@@ -246,6 +336,10 @@ void commandBufferRecord(State* state)
     vkCmdDraw(cmd, 3, 1, 0, 0);
     vkCmdEndRenderPass(cmd);
 
+    // ─────────────────────────────────────────────
+    // GUI
+    // ─────────────────────────────────────────────
     guiDraw(state, cmd);
+
     vkEndCommandBuffer(cmd);
 }

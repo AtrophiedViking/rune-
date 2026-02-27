@@ -11,8 +11,25 @@
 #include "core/config.h"
 #include "core/state.h"
 
+VkResult allocateDescriptorSetsWithResize(State* state,	const VkDescriptorSetAllocateInfo* allocInfo, VkDescriptorSet* sets)
+{
+	VkResult result = vkAllocateDescriptorSets(state->context->device, allocInfo, sets);
+
+	if (result == VK_ERROR_OUT_OF_POOL_MEMORY || result == VK_ERROR_FRAGMENTED_POOL) {
+		// Resize pool
+		globalDescriptorPoolDestroy(state);
+		globalDescriptorPoolCreate(state); // Recreate with larger size
+
+		// Retry allocation
+		result = vkAllocateDescriptorSets(state->context->device, allocInfo, sets);
+	}
+
+	return result;
+}
+
 // set 0: global UBO
-void createGlobalSetLayout(State* state) {
+void globalSetLayoutCreate(State* state) {
+
 	VkDescriptorSetLayoutBinding uboBinding{
 		.binding = 0,
 		.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
@@ -20,21 +37,249 @@ void createGlobalSetLayout(State* state) {
 		.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
 		.pImmutableSamplers = nullptr
 	};
+	VkDescriptorSetLayoutBinding cubemapBinding{
+	.binding = 1,
+	.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+	.descriptorCount = 1,
+	.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+	.pImmutableSamplers = nullptr
+	};
+	VkDescriptorSetLayoutBinding colorBinding{
+	.binding = 2,
+	.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+	.descriptorCount = 1,
+	.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+	.pImmutableSamplers = nullptr
+	};
+	VkDescriptorSetLayoutBinding depthBinding{
+	.binding = 3,
+	.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+	.descriptorCount = 1,
+	.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+	.pImmutableSamplers = nullptr
+	};
+
+	std::array<VkDescriptorSetLayoutBinding, 4> bindings = {
+		uboBinding,
+		cubemapBinding,
+		colorBinding,
+		depthBinding
+	};
 
 	VkDescriptorSetLayoutCreateInfo info{
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-		.bindingCount = 1,
-		.pBindings = &uboBinding
+		.bindingCount = static_cast<uint32_t>(bindings.size()),
+		.pBindings = bindings.data()
 	};
 
 	PANIC(
-		vkCreateDescriptorSetLayout(state->context->device, &info, nullptr, &state->renderer->descriptorSetLayout),
+		vkCreateDescriptorSetLayout(state->context->device, &info, nullptr, &state->renderer->globalSetLayout),
 		"Failed to create global UBO set layout"
 	);
 }
+void globalSetLayoutDestroy(State* state) {
+	vkDestroyDescriptorSetLayout(state->context->device, state->renderer->globalSetLayout, nullptr);
+};
+void globalDescriptorPoolCreate(State* state)
+{
+	uint32_t frames = state->config->swapchainBuffering;
+
+	// envMap + sceneColor + sceneDepth
+	uint32_t globalImageDescriptors =
+		frames * 3 * state->renderer->descriptorPoolMultiplier;
+
+	// present: scene + accum + reveal
+	uint32_t presentImageDescriptors = 3;
+
+	uint32_t imageDescriptorCount =
+		globalImageDescriptors + presentImageDescriptors;
+
+	uint32_t uboDescriptorCount =
+		frames * state->renderer->descriptorPoolMultiplier;
+
+	std::array<VkDescriptorPoolSize, 2> poolSizes{
+		VkDescriptorPoolSize{
+			VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+			uboDescriptorCount
+		},
+		VkDescriptorPoolSize{
+			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			imageDescriptorCount
+		}
+	};
+
+	uint32_t totalSets =
+		(frames + 1) * state->renderer->descriptorPoolMultiplier; // frames global + 1 present
+
+	VkDescriptorPoolCreateInfo poolInfo{
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+		.flags = 0,
+		.maxSets = totalSets,
+		.poolSizeCount = static_cast<uint32_t>(poolSizes.size()),
+		.pPoolSizes = poolSizes.data(),
+	};
+
+	PANIC(
+		vkCreateDescriptorPool(
+			state->context->device,
+			&poolInfo,
+			nullptr,
+			&state->renderer->globalDescriptorPool
+		),
+		"Failed to create global descriptor pool!"
+	);
+
+}
+void globalDescriptorPoolDestroy(State* state)
+{
+	// 1. Destroy per-material UBOs
+	for (Material* mat : state->scene->materials)
+	{
+		if (mat->materialBuffer != VK_NULL_HANDLE)
+		{
+			vkDestroyBuffer(state->context->device, mat->materialBuffer, nullptr);
+			mat->materialBuffer = VK_NULL_HANDLE;
+		}
+
+		if (mat->materialMemory != VK_NULL_HANDLE)
+		{
+			vkFreeMemory(state->context->device, mat->materialMemory, nullptr);
+			mat->materialMemory = VK_NULL_HANDLE;
+		}
+	}
+
+	// 2. Destroy descriptor pool
+	if (state->renderer->globalDescriptorPool != VK_NULL_HANDLE)
+	{
+		vkDestroyDescriptorPool(state->context->device,
+			state->renderer->globalDescriptorPool,
+			nullptr);
+		state->renderer->globalDescriptorPool = VK_NULL_HANDLE;
+	}
+}
+void globalSetsCreate(State* state)
+{
+	uint32_t frames = state->config->swapchainBuffering;
+
+	state->renderer->globalSets.resize(frames);
+
+	std::vector<VkDescriptorSetLayout> layouts(
+		frames,
+		state->renderer->globalSetLayout
+	);
+
+	VkDescriptorSetAllocateInfo allocInfo{
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+		.descriptorPool = state->renderer->globalDescriptorPool,
+		.descriptorSetCount = frames,
+		.pSetLayouts = layouts.data()
+	};
+
+	PANIC(
+		vkAllocateDescriptorSets(
+			state->context->device,
+			&allocInfo,
+			state->renderer->globalSets.data()
+		),
+		"Failed to allocate global UBO descriptor sets!"
+	);
+
+	for (uint32_t i = 0; i < frames; i++)
+	{
+		// ─────────────────────────────────────────────
+		// Binding 0: UBO
+		// ─────────────────────────────────────────────
+		VkDescriptorBufferInfo bufferInfo{
+			.buffer = state->renderer->uniformBuffers[i],
+			.offset = 0,
+			.range = sizeof(UniformBufferObject)
+		};
+
+		VkWriteDescriptorSet writeUBO{
+			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			.dstSet = state->renderer->globalSets[i],
+			.dstBinding = 0,
+			.descriptorCount = 1,
+			.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+			.pBufferInfo = &bufferInfo
+		};
+
+		// ─────────────────────────────────────────────
+		// Binding 1: Cube map sampler (envMap)
+		// ─────────────────────────────────────────────
+		VkDescriptorImageInfo cubeInfo{
+			.sampler = state->texture->cubeSampler,
+			.imageView = state->texture->cubeImageView,
+			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+		};
+
+		VkWriteDescriptorSet writeCube{
+			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			.dstSet = state->renderer->globalSets[i],
+			.dstBinding = 1,
+			.descriptorCount = 1,
+			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			.pImageInfo = &cubeInfo
+		};
+
+		// ─────────────────────────────────────────────
+		// Binding 2: sceneColor sampler (opaque pass)
+		// ─────────────────────────────────────────────
+		VkDescriptorImageInfo sceneInfo{
+			.sampler = state->texture->sceneColorSampler,
+			.imageView = state->texture->sceneColorImageView,
+			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+		};
+
+		VkWriteDescriptorSet writeScene{
+			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			.dstSet = state->renderer->globalSets[i],
+			.dstBinding = 2,
+			.descriptorCount = 1,
+			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			.pImageInfo = &sceneInfo
+		};
+
+		// ─────────────────────────────────────────────
+		// Binding 3: sceneDepth sampler (opaque depth)
+		// ─────────────────────────────────────────────
+		VkDescriptorImageInfo depthInfo{
+			.sampler = state->texture->sceneDepthSampler,      // your resolved depth sampler
+			.imageView = state->texture->sceneDepthImageView,  // your resolved depth view
+			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+		};
+
+		VkWriteDescriptorSet writeDepth{
+			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			.dstSet = state->renderer->globalSets[i],
+			.dstBinding = 3,
+			.descriptorCount = 1,
+			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			.pImageInfo = &depthInfo
+		};
+
+		// ─────────────────────────────────────────────
+		// Submit all writes
+		// ─────────────────────────────────────────────
+		std::array<VkWriteDescriptorSet, 4> writes = {
+			writeUBO,
+			writeCube,
+			writeScene,
+			writeDepth
+		};
+
+		vkUpdateDescriptorSets(
+			state->context->device,
+			static_cast<uint32_t>(writes.size()),
+			writes.data(),
+			0,
+			nullptr
+		);
+	}
+}
 
 // set 1: texture (for now, just baseColor at binding 0)
-void createTextureSetLayout(State* state) {
+void materialSetLayoutCreate(State* state) {
 	std::array<VkDescriptorSetLayoutBinding, 8> bindings{};
 
 	
@@ -114,139 +359,67 @@ void createTextureSetLayout(State* state) {
 			state->context->device,
 			&layoutInfo,
 			nullptr,
-			&state->renderer->textureSetLayout),
+			&state->renderer->materialSetLayout),
 		"Failed to create texture set layout"
 	);
 }
-
-void descriptorSetLayoutDestroy(State* state) {
-	vkDestroyDescriptorSetLayout(state->context->device, state->renderer->descriptorSetLayout, nullptr);
-	vkDestroyDescriptorSetLayout(state->context->device, state->renderer->textureSetLayout, nullptr);
-};
-
-void descriptorPoolCreate(State* state)
+void materialSetLayoutDestroy(State* state) {
+	vkDestroyDescriptorSetLayout(state->context->device, state->renderer->materialSetLayout, nullptr);
+}
+void materialDescriptorPoolCreate(State* state)
 {
-	uint32_t frames = state->config->swapchainBuffering;
 	uint32_t materialCount = state->scene->materials.size();
+	if (materialCount == 0) return;
 
-	uint32_t imageDescriptorCount = materialCount * 5 * state->renderer->descriptorPoolMultiplier;
-	uint32_t uboDescriptorCount = frames * state->renderer->descriptorPoolMultiplier;
+	uint32_t materialImageDescriptors =
+		materialCount * 7 * state->renderer->descriptorPoolMultiplier;  // 7 textures
+
+	uint32_t materialUboDescriptors =
+		materialCount * state->renderer->descriptorPoolMultiplier;      // 1 UBO per material
 
 	std::array<VkDescriptorPoolSize, 2> poolSizes{
-		VkDescriptorPoolSize{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, uboDescriptorCount },
-		VkDescriptorPoolSize{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, imageDescriptorCount }
+		VkDescriptorPoolSize{
+			VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+			materialUboDescriptors
+		},
+		VkDescriptorPoolSize{
+			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			materialImageDescriptors
+		}
 	};
 
-	uint32_t totalSets = (frames + materialCount) * state->renderer->descriptorPoolMultiplier;
+	uint32_t totalSets =
+		materialCount * state->renderer->descriptorPoolMultiplier;
 
 	VkDescriptorPoolCreateInfo poolInfo{
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
 		.flags = 0,
 		.maxSets = totalSets,
-		.poolSizeCount = (uint32_t)poolSizes.size(),
+		.poolSizeCount = static_cast<uint32_t>(poolSizes.size()),
 		.pPoolSizes = poolSizes.data(),
 	};
 
 	PANIC(
-		vkCreateDescriptorPool(state->context->device, &poolInfo, nullptr, &state->renderer->opaqueDescriptorPool),
-		"Failed to create descriptor pool!"
+		vkCreateDescriptorPool(
+			state->context->device,
+			&poolInfo,
+			nullptr,
+			&state->renderer->materialDescriptorPool
+		),
+		"Failed to create material descriptor pool!"
 	);
 }
-VkResult allocateDescriptorSetsWithResize(State* state,	const VkDescriptorSetAllocateInfo* allocInfo, VkDescriptorSet* sets)
+void materialDescriptorPoolDestroy(State* state)
 {
-	VkResult result = vkAllocateDescriptorSets(state->context->device, allocInfo, sets);
-
-	if (result == VK_ERROR_OUT_OF_POOL_MEMORY || result == VK_ERROR_FRAGMENTED_POOL) {
-		// Resize pool
-		descriptorPoolDestroy(state);
-		descriptorPoolCreate(state); // Recreate with larger size
-
-		// Retry allocation
-		result = vkAllocateDescriptorSets(state->context->device, allocInfo, sets);
-	}
-
-	return result;
-}
-void descriptorPoolDestroy(State* state)
-{
-	// 1. Destroy per-material UBOs
-	for (Material* mat : state->scene->materials)
-	{
-		if (mat->materialBuffer != VK_NULL_HANDLE)
-		{
-			vkDestroyBuffer(state->context->device, mat->materialBuffer, nullptr);
-			mat->materialBuffer = VK_NULL_HANDLE;
-		}
-
-		if (mat->materialMemory != VK_NULL_HANDLE)
-		{
-			vkFreeMemory(state->context->device, mat->materialMemory, nullptr);
-			mat->materialMemory = VK_NULL_HANDLE;
-		}
-	}
-
-	// 2. Destroy descriptor pool
-	if (state->renderer->opaqueDescriptorPool != VK_NULL_HANDLE)
+	if (state->renderer->materialDescriptorPool != VK_NULL_HANDLE)
 	{
 		vkDestroyDescriptorPool(state->context->device,
-			state->renderer->opaqueDescriptorPool,
+			state->renderer->materialDescriptorPool,
 			nullptr);
-		state->renderer->opaqueDescriptorPool = VK_NULL_HANDLE;
+		state->renderer->materialDescriptorPool = VK_NULL_HANDLE;
 	}
 }
-
-void descriptorSetsCreate(State* state)
-{
-	uint32_t frames = state->config->swapchainBuffering;
-
-	state->renderer->descriptorSets.resize(frames);
-
-	std::vector<VkDescriptorSetLayout> layouts(frames, state->renderer->descriptorSetLayout);
-
-	VkDescriptorSetAllocateInfo allocInfo{
-		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-		.descriptorPool = state->renderer->opaqueDescriptorPool,
-		.descriptorSetCount = frames,
-		.pSetLayouts = layouts.data()
-	};
-
-	PANIC(
-		vkAllocateDescriptorSets(
-			state->context->device,
-			&allocInfo,
-			state->renderer->descriptorSets.data()
-		),
-		"Failed to allocate global UBO descriptor sets!"
-	);
-
-	for (uint32_t i = 0; i < frames; i++)
-	{
-		VkDescriptorBufferInfo bufferInfo{
-			.buffer = state->renderer->uniformBuffers[i],
-			.offset = 0,
-			.range = sizeof(UniformBufferObject)
-		};
-
-		VkWriteDescriptorSet writeUBO{
-			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-			.dstSet = state->renderer->descriptorSets[i],
-			.dstBinding = 0,
-			.descriptorCount = 1,
-			.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-			.pBufferInfo = &bufferInfo
-		};
-
-		vkUpdateDescriptorSets(
-			state->context->device,
-			1,
-			&writeUBO,
-			0,
-			nullptr
-		);
-	}
-}
-
-void createMaterialDescriptorSets(State* state)
+void materialSetsCreate(State* state)
 {
 	uint32_t materialCount = state->scene->materials.size();
 	if (materialCount == 0) return;
@@ -255,9 +428,9 @@ void createMaterialDescriptorSets(State* state)
 	{
 		VkDescriptorSetAllocateInfo allocInfo{
 			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-			.descriptorPool = state->renderer->opaqueDescriptorPool,
+			.descriptorPool = state->renderer->materialDescriptorPool,
 			.descriptorSetCount = 1,
-			.pSetLayouts = &state->renderer->textureSetLayout
+			.pSetLayouts = &state->renderer->materialSetLayout
 		};
 
 		VkResult result = allocateDescriptorSetsWithResize(state, &allocInfo, &mat->descriptorSet);
@@ -297,6 +470,7 @@ void createMaterialDescriptorSets(State* state)
 		gpu.thicknessFactor = mat->thicknessFactor;
 		gpu.attenuationDistance = mat->attenuationDistance;
 		gpu.attenuationColor = mat->attenuationColor;
+		gpu.ior = mat->ior;
 
 		createBufferForMaterial(
 			state,
@@ -362,6 +536,8 @@ void createMaterialDescriptorSets(State* state)
 		);
 	}
 }
+
+// set 2: present (sceneColor, transAccum, transReveal)
 void presentSetLayoutCreate(State* state) {
 	VkDescriptorSetLayoutBinding sceneBinding{
 		.binding = 0,
@@ -411,7 +587,7 @@ void presentDescriptorSetAllocate(State* state) {
 
 	VkDescriptorSetAllocateInfo allocInfo{
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-		.descriptorPool = state->renderer->opaqueDescriptorPool, // ✔ your pool
+		.descriptorPool = state->renderer->globalDescriptorPool,
 		.descriptorSetCount = 1,
 		.pSetLayouts = &layout,
 	};
@@ -516,6 +692,40 @@ void destroySceneColorSampler(State* state) {
 	}
 }
 
+// For sampling the opaque depth buffer in the transparent pass. We use a simple linear sampler since we'll be doing manual PCF in the shader.
+void sceneDepthSamplerCreate(State* state)
+{
+	VkSamplerCreateInfo info{
+		.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+		.magFilter = VK_FILTER_LINEAR,
+		.minFilter = VK_FILTER_LINEAR,
+		.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST,
+		.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+		.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+		.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+		.mipLodBias = 0.0f,
+		.anisotropyEnable = VK_FALSE,
+		.maxAnisotropy = 1.0f,
+		.compareEnable = VK_FALSE,     // sampling depth as float, not shadow compare
+		.compareOp = VK_COMPARE_OP_ALWAYS,
+		.minLod = 0.0f,
+		.maxLod = 0.0f,
+		.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE,
+		.unnormalizedCoordinates = VK_FALSE
+	};
+
+	PANIC(
+		vkCreateSampler(
+			state->context->device,
+			&info,
+			nullptr,
+			&state->texture->sceneDepthSampler
+		),
+		"Failed to create scene depth sampler"
+	);
+}
+
+// Uniform buffers (global UBO at set 0 binding 0)
 void uniformBuffersCreate(State* state) {
 	// One global UBO per frame in flight
 	state->renderer->uniformBuffers.resize(state->config->swapchainBuffering);

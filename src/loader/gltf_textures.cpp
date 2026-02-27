@@ -297,7 +297,8 @@ void createTextureFromMemory(State* state, const unsigned char* pixels, size_t s
         format,
         VK_IMAGE_LAYOUT_UNDEFINED,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        outTex.mipLevels
+        outTex.mipLevels,
+        1
     );
 
     copyBufferToImage(
@@ -402,7 +403,7 @@ void textureImageCreate(State* state, std::string texturePath) {
 
     imageCreate(state, texWidth, texHeight, textureFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, state->texture->textureImage, state->texture->textureImageMemory, state->texture->mipLevels, VK_SAMPLE_COUNT_1_BIT);
 
-    transitionImageLayout(state, state->texture->textureImage, textureFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, state->texture->mipLevels);
+    transitionImageLayout(state, state->texture->textureImage, textureFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, state->texture->mipLevels, 1);
     copyBufferToImage(state, stagingBuffer, state->texture->textureImage, static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
     vkDestroyBuffer(state->context->device, stagingBuffer, nullptr);
     vkFreeMemory(state->context->device, stagingBufferMemory, nullptr);

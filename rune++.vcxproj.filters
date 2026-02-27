@@ -156,6 +156,9 @@
     <ClCompile Include="src\loader\gltf_extensions.cpp">
       <Filter>src\loader</Filter>
     </ClCompile>
+    <ClCompile Include="src\loader\ktx_cubemap.cpp">
+      <Filter>src\loader</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\core\state.h">
@@ -285,6 +288,9 @@
       <Filter>src\render</Filter>
     </ClInclude>
     <ClInclude Include="src\loader\gltf_extensions.h">
+      <Filter>src\loader</Filter>
+    </ClInclude>
+    <ClInclude Include="src\loader\ktx_cubemap.h">
       <Filter>src\loader</Filter>
     </ClInclude>
   </ItemGroup>

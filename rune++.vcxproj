@@ -153,6 +153,7 @@
     <ClCompile Include="src\loader\gltf_meshes.cpp" />
     <ClCompile Include="src\loader\gltf_nodes.cpp" />
     <ClCompile Include="src\loader\gltf_textures.cpp" />
+    <ClCompile Include="src\loader\ktx_cubemap.cpp" />
     <ClCompile Include="src\render\command_buffers.cpp" />
     <ClCompile Include="src\render\descriptors.cpp" />
     <ClCompile Include="src\render\frame_buffers.cpp" />
@@ -197,6 +198,7 @@
     <ClInclude Include="src\loader\gltf_meshes.h" />
     <ClInclude Include="src\loader\gltf_nodes.h" />
     <ClInclude Include="src\loader\gltf_textures.h" />
+    <ClInclude Include="src\loader\ktx_cubemap.h" />
     <ClInclude Include="src\render\command_buffers.h" />
     <ClInclude Include="src\render\descriptors.h" />
     <ClInclude Include="src\render\frame_buffers.h" />

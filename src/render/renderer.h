@@ -13,26 +13,34 @@ struct Material;
 struct DrawItem;
 
 struct Renderer {
+
 	//Sorting
 	std::vector<DrawItem*> opaqueDrawItems;
 	std::vector<DrawItem*> transparentDrawItems;
 	std::vector<MaterialGPU> materialsGPU;
 	std::vector<MeshGPU> meshesGPU;
 
+	//Frame Data
 	uint32_t imageAquiredIndex;
 	VkSemaphore* imageAvailableSemaphore;
 	VkSemaphore* renderFinishedSemaphore;
 	VkFence* inFlightFence;
 	uint32_t frameIndex;
 
+	//Descriptors
 	uint32_t descriptorPoolMultiplier = 2;
-	VkDescriptorSetLayout descriptorSetLayout;
-	VkDescriptorSetLayout textureSetLayout;
-	std::vector<VkDescriptorSet> descriptorSets;
-
+	//Global descriptors
+	VkDescriptorPool globalDescriptorPool;
+	VkDescriptorSetLayout globalSetLayout;
+	std::vector<VkDescriptorSet> globalSets;
+	//Present descriptors
 	VkDescriptorSetLayout presentDescriptorSetLayout;
 	VkDescriptorSet presentDescriptorSet;
-
+	//Material descriptors
+	VkDescriptorPool materialDescriptorPool;
+	VkDescriptorSetLayout materialSetLayout;
+	std::vector<VkDescriptorSet> materialSets;
+	//Uniform Buffers
 	std::vector<VkBuffer> uniformBuffers;
 	std::vector<VkDeviceMemory> uniformBuffersMemory;
 	std::vector<void*> uniformBuffersMapped;
@@ -46,15 +54,15 @@ struct Renderer {
 
 	VkCommandPool commandPool;
 
+
+
 	//opaque Pipeline
 	VkPipeline opaquePipeline;
 	VkPipelineLayout opaquePipelineLayout;
 	VkRenderPass opaqueRenderPass;
-	VkDescriptorPool opaqueDescriptorPool;
 
 	//transparency Pipeline
 	VkPipeline transparencyPipeline;
-	VkDescriptorPool transparencyDescriptorPool;
 	VkPipelineLayout transparencyPipelineLayout;
 	VkRenderPass transparencyRenderPass;
 
@@ -62,7 +70,6 @@ struct Renderer {
 	VkPipeline presentPipeline;
 	VkDescriptorSetLayout presentSetLayout;
 	VkDescriptorSet presentSet;
-	VkDescriptorPool presentDescriptorPool;
 	VkPipelineLayout presentPipelineLayout;
 	VkRenderPass presentRenderPass;
 

@@ -11,3 +11,4 @@ struct Material;
 
 void parseTransmissionExtension(const tinygltf::Material& m, Material& mat, uint32_t baseTextureIndex, std::unordered_map<int, TextureRole>& roles);
 void parseVolumeExtension(const tinygltf::Material& m, Material& mat, uint32_t baseTextureIndex, std::unordered_map<int, TextureRole>& roles);
+void parseIorExtension(const tinygltf::Material& m, Material& mat);

@@ -32,7 +32,7 @@ layout(push_constant) uniform PushConstants {
 // ─────────────────────────────────────────────
 // UBO (set = 0, binding = 0)
 // ─────────────────────────────────────────────
-layout(binding = 0) uniform UniformBufferObject {
+layout(set = 0, binding = 0) uniform UniformBufferObject {
     mat4 model;
     mat4 view;
     mat4 proj;
@@ -46,6 +46,7 @@ layout(binding = 0) uniform UniformBufferObject {
     float prefilteredCubeMipLevels; // unused here
     float scaleIBLAmbient;          // unused here
 } ubo;
+layout(set = 0, binding = 1) uniform samplerCube envMap;
 // ─────────────────────────────────────────────
 // UBO (set = 1, binding = 0)
 // ─────────────────────────────────────────────
@@ -63,6 +64,11 @@ layout(std140, set = 1, binding = 0) uniform MaterialData {
     TexTransform normalTT;
     TexTransform occlusionTT;
     TexTransform emissiveTT;
+
+    float thicknessFactor;
+	float attenuationDistance;
+	vec4 attenuationColor;
+	float ior;
 } uMat;
 
 
@@ -195,6 +201,11 @@ vec3 FresnelSchlick(float cosTheta, vec3 F0)
     return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
 }
 
+float IorToF0(float ior)
+{
+    float x = (ior - 1.0) / (ior + 1.0);
+    return x * x;
+}
 //GLTF extension helpers
 float getTransmission()
 {
@@ -311,10 +322,15 @@ void main()
     vec3 N = getNormalFromMap();
     vec3 V = normalize(ubo.camPos.xyz - fragWorldPos);
 
-    // Base reflectance
+    // Base reflectance from IOR + metallic
     vec3 albedo = pow(baseColor.rgb * fragColorVS, vec3(2.2));
-    vec3 F0 = mix(vec3(0.04), albedo, metallic);
-
+    
+    float F0_scalar = IorToF0(uMat.ior);
+    vec3  F0        = vec3(F0_scalar);
+    
+    // Metallic overrides F0 toward albedo
+    F0 = mix(F0, albedo, metallic);
+    
     // Direct lighting
     vec3 Lo = vec3(0.0);
     for (int i = 0; i < 4; ++i) {
@@ -358,6 +374,27 @@ void main()
     color = vec3(1.0) - exp(-color * ubo.exposure);
     color = pow(color, vec3(1.0 / ubo.gamma));
 
+    float transmission = getTransmission();
+
+if (transmission > 0.0) {
+    // Fresnel at view angle
+    float NdotV = max(dot(N, V), 0.0);
+    vec3 Fview = FresnelSchlick(NdotV, F0);
+
+    // Refracted direction
+    vec3 R = refract(-V, N, 1.0 / uMat.ior);
+
+    // Sample environment or background along refracted ray
+    // Replace sampleEnvironment() with your actual env/background sampling
+    vec3 refractedColor = sampleEnvironment(R);
+
+    // Apply volume attenuation (thickness + attenuationColor)
+    refractedColor = applyVolumeToTransmission(refractedColor);
+
+    // Mix opaque shading with refraction using Fresnel + transmission
+    float transWeight = transmission * (1.0 - Fview.r);
+    color = mix(color, refractedColor, transWeight);
+}
     float alpha = baseColor.a;
     outColor = vec4(color, alpha);
 }

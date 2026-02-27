@@ -32,7 +32,7 @@ layout(push_constant) uniform PushConstants {
 // ─────────────────────────────────────────────
 // UBO (set = 0, binding = 0)
 // ─────────────────────────────────────────────
-layout(binding = 0) uniform UniformBufferObject {
+layout(set = 0, binding = 0) uniform UniformBufferObject {
     mat4 model;
     mat4 view;
     mat4 proj;
@@ -46,7 +46,9 @@ layout(binding = 0) uniform UniformBufferObject {
     float prefilteredCubeMipLevels; // unused here
     float scaleIBLAmbient;          // unused here
 } ubo;
-
+layout(set = 0, binding = 1) uniform samplerCube envMap;
+layout(set = 0, binding = 2) uniform sampler2D sceneColor;
+layout(set = 0, binding = 3) uniform sampler2D sceneDepth;
 // ─────────────────────────────────────────────
 // UBO (set = 1, binding = 5)
 // ─────────────────────────────────────────────
@@ -64,6 +66,11 @@ layout(std140, set = 1, binding = 0) uniform MaterialData {
     TexTransform normalTT;
     TexTransform occlusionTT;
     TexTransform emissiveTT;
+
+    float thicknessFactor;
+	float attenuationDistance;
+	vec4 attenuationColor;
+	float ior;
 } uMat;
 
 
@@ -190,7 +197,11 @@ float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness)
     float ggx2  = GeometrySchlickGGX(NdotL, roughness);
     return ggx1 * ggx2;
 }
-
+float IorToF0(float ior)
+{
+    float x = (ior - 1.0) / (ior + 1.0);
+    return x * x;
+}
 vec3 FresnelSchlick(float cosTheta, vec3 F0)
 {
     return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
@@ -239,6 +250,69 @@ vec3 applyVolumeToTransmission(vec3 transmittedColor)
     vec3 att = pow(pc.attenuation.xyz, vec3(ratio));
 
     return transmittedColor * att;
+}
+
+vec3 sampleEnvironment(vec3 dir)
+{
+    return texture(envMap, dir).rgb;
+}
+
+
+vec2 computeRefractedUV(vec3 worldPos, vec3 N, vec3 V)
+{
+    float eta = 1.0 / uMat.ior;
+    vec3 R = refract(-V, N, eta);
+
+    // Use glTF thicknessFactor to control distortion depth
+    vec3 samplePos = worldPos + R * uMat.thicknessFactor;
+
+    vec4 clip = ubo.proj * ubo.view * vec4(samplePos, 1.0);
+    vec3 ndc  = clip.xyz / clip.w;
+
+    return ndc.xy * 0.5 + 0.5;
+}
+
+vec2 refractUVDepthAware(vec3 worldPos, vec3 N, vec3 V)
+{
+    float eta = 1.0 / uMat.ior;
+    vec3 R = refract(-V, N, eta);
+
+    // March the ray in view space
+    vec3 viewPos = (ubo.view * vec4(worldPos, 1.0)).xyz;
+    vec3 viewDir = normalize((ubo.view * vec4(worldPos + R, 1.0)).xyz - viewPos);
+
+    // Step size in view space (tune this)
+    float stepSize = 0.05;
+    float maxDistance = 5.0;
+
+    for (float t = 0.0; t < maxDistance; t += stepSize)
+    {
+        vec3 p = viewPos + viewDir * t;
+
+        // Project to clip space
+        vec4 clip = ubo.proj * vec4(p, 1.0);
+        vec3 ndc = clip.xyz / clip.w;
+        vec2 uv = ndc.xy * 0.5 + 0.5;
+
+        // Skip if outside screen
+        if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0)
+            continue;
+
+        // Sample depth buffer
+        float sceneDepthNDC = texture(sceneDepth, uv).r;
+
+        // Convert depth to view space
+        float sceneDepthView = -ubo.proj[3][2] / (sceneDepthNDC * 2.0 - 1.0 + ubo.proj[2][2]);
+
+        // If ray is behind geometry → intersection found
+        if (-p.z > sceneDepthView)
+            return uv;
+    }
+
+    // Fallback: simple projection
+    vec4 clip = ubo.proj * ubo.view * vec4(worldPos + R, 1.0);
+    vec3 ndc = clip.xyz / clip.w;
+    return ndc.xy * 0.5 + 0.5;
 }
 
 
@@ -312,9 +386,13 @@ void main()
     vec3 N = getNormalFromMap();
     vec3 V = normalize(ubo.camPos.xyz - fragWorldPos);
 
-    // Base reflectance
-    vec3 albedo = pow(baseColor.rgb * fragColorVS, vec3(2.2));
-    vec3 F0 = mix(vec3(0.04), albedo, metallic);
+   vec3 albedo = pow(baseColor.rgb * fragColorVS, vec3(2.2));
+
+    float F0_scalar = IorToF0(uMat.ior);   // uses KHR_materials_ior
+    vec3  F0        = vec3(F0_scalar);
+    
+    // Metallic overrides F0 toward albedo
+    F0 = mix(F0, albedo, metallic);
 
     // Direct lighting
     vec3 Lo = vec3(0.0);
@@ -357,15 +435,41 @@ void main()
     vec3 colorOpaque = ambient + Lo + emissive;
 
     float transmission = getTransmission();
-    vec3 transmittedColor = baseColor.rgb;
+    // ─────────────────────────────────────────────
+    // Refraction: screen-space + env fallback
+    // ─────────────────────────────────────────────
+    N = normalize(N);
     
-    if (transmission > 0.0)
-    {
-        transmittedColor = applyVolumeToTransmission(transmittedColor);
-    }
+    // Screen-space refracted UV
+    vec2 refractUV = refractUVDepthAware(fragWorldPos, N, V);
+    refractUV = clamp(refractUV, vec2(0.001), vec2(0.999));
     
-    vec3 color = mix(colorOpaque, transmittedColor, transmission);
+    // Sample scene color (actual geometry behind)
+    vec3 sceneRefract = texture(sceneColor, refractUV).rgb;
     
+    // Env-based fallback (for off-screen / background)
+    float eta = 1.0 / uMat.ior;
+    vec3 Renv = refract(-V, N, eta);
+    vec3 envRefract = texture(envMap, Renv).rgb;
+    
+    // Volume attenuation
+    sceneRefract = applyVolumeToTransmission(sceneRefract);
+    envRefract   = applyVolumeToTransmission(envRefract);
+    
+    // Fresnel at view angle using IOR-based F0
+    float NdotV = max(dot(N, V), 0.0);
+    vec3 Fview  = FresnelSchlick(NdotV, F0);
+    
+    // Blend scene vs env refraction (scene dominates)
+    vec3 refractedColor = mix(envRefract, sceneRefract, transmission);
+    
+    // Portion that actually goes into transmission
+    float transWeight = transmission * (1.0 - Fview.r);
+    
+    // Final color mix: opaque lighting vs refraction
+    vec3 color = mix(colorOpaque, refractedColor, transWeight);
+    
+
     color = vec3(1.0) - exp(-color * ubo.exposure);
     color = pow(color, vec3(1.0 / ubo.gamma));
 
@@ -373,7 +477,7 @@ void main()
     //float alpha = baseColor.a * (1.0 - transmission);
     
     // or, if you want to ignore baseColor.a for transmission:
-    float alpha = baseColor.a * (1.0 - (transmission));
+    float alpha = baseColor.a * (1.0 - (transmission/2));
 
 
     // discard fully transparent

@@ -137,6 +137,7 @@ void fillMaterialFromGltf(const tinygltf::Material& m, Material& mat,
     // Extensions
     parseTransmissionExtension(m, mat, baseTextureIndex, roles);
     parseVolumeExtension(m, mat, baseTextureIndex, roles);
+    parseIorExtension(m, mat);
 }
 
 

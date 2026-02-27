@@ -39,7 +39,8 @@ struct Material {
     bool  doubleSided = false;
 
     glm::vec4 attenuationColor = glm::vec4(1.0f);
-    float      attenuationDistance = 1e6f;
+    float     attenuationDistance = 1e6f;
+    float     ior = 1.5f;
 
     VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
     VkBuffer        materialBuffer = VK_NULL_HANDLE;

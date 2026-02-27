@@ -2,6 +2,7 @@
 #include "loader/gltf_textures.h"
 #include "loader/gltf_meshes.h"
 #include "loader/gltf_loader.h"
+#include "loader/ktx_cubemap.h"
 #include "scene/model.h"
 #include "scene/scene.h"
 #include "scene/camera.h"
@@ -41,12 +42,12 @@ void init(State *state) {
 
 	guiRenderPassCreate(state);
 	guiFramebuffersCreate(state);
-	guiDescriptorPoolCreate(state);   // <-- MUST be here
+	guiDescriptorPoolCreate(state); 
 
 	guiInit(state);
-	// MUST come BEFORE pipeline creation
-	createGlobalSetLayout(state);
-	createTextureSetLayout(state);
+
+	globalSetLayoutCreate(state);
+	materialSetLayoutCreate(state);
 	presentSetLayoutCreate(state);
 
 	opaquePipelineCreate(state);
@@ -59,9 +60,13 @@ void init(State *state) {
 
 	colorResourceCreate(state);
 	depthResourceCreate(state);
+	sceneDepthSamplerCreate(state);
 	sceneColorResourceCreate(state);
 	presentSamplerCreate(state);
 
+	textureCubeImageCreate(state, state->config->DEFAULT_CUBEMAP);
+	createCubeImageView(state, state->texture->cubeImage, state->texture->format, state->texture->mipLevels, state->texture->cubeImageView);
+	createCubeSampler(state, state->texture->cubeSampler);
 
 
 	printf("Opaque depth image:      %p\n", (void*)state->texture->msaaDepthImage);
@@ -99,10 +104,11 @@ void init(State *state) {
 
 	uniformBuffersCreate(state);
 
-	descriptorPoolCreate(state);
+	globalDescriptorPoolCreate(state);
+	materialDescriptorPoolCreate(state);
 
-	descriptorSetsCreate(state);        // global UBO set (set = 0)
-	createMaterialDescriptorSets(state); // texture sets (set = 1)
+	globalSetsCreate(state);        // global UBO set (set = 0)
+	materialSetsCreate(state); // texture sets (set = 1)
 
 	presentDescriptorSetAllocate(state);   // ← add
 	presentDescriptorSetUpdate(state);     // ← add
@@ -139,8 +145,8 @@ void cleanup(State *state) {
 	destroyTextures(state);
 
 	uniformBuffersDestroy(state);
-	descriptorPoolDestroy(state);
-	descriptorSetLayoutDestroy(state);
+	globalDescriptorPoolDestroy(state);
+	globalSetLayoutDestroy(state);
 	indexBufferDestroy(state);
 	vertexBufferDestroy(state);
 	syncObjectsDestroy(state);

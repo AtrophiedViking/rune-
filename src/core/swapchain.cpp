@@ -2,6 +2,7 @@
 #include "render/frame_buffers.h"
 #include "render/descriptors.h"
 #include "render/render_pass.h"
+#include "render/renderer.h"
 #include "resources/images.h"
 #include "gui/gui.h"
 #include "core/swapchain.h"
@@ -126,7 +127,9 @@ void swapchainCleanup(State* state) {
 	imageViewsDestroy(state);
 	swapchainDestroy(state);
 	guiFramebuffersDestroy(state);
-};
+
+}
+
 void swapchainRecreate(State* state) {
 	int width = 0, height = 0;
 	glfwGetFramebufferSize(state->window.handle, &width, &height);
@@ -137,20 +140,35 @@ void swapchainRecreate(State* state) {
 
 	vkDeviceWaitIdle(state->context->device);
 	swapchainCleanup(state);
+
 	swapchainCreate(state);
 	swapchainImageGet(state);
-	
 	transitionSwapchainImagesToPresent(state);
 
 	imageViewsCreate(state);
 	sceneColorResourceCreate(state);
 	colorResourceCreate(state);
 	depthResourceCreate(state);
+
 	opaqueFrameBuffersCreate(state);
 	transparentFrameBuffersCreate(state);
 	presentFramebuffersCreate(state);
+
+	// 🔹 reset the pool that owns global + material + present sets
+	vkResetDescriptorPool(
+		state->context->device,
+		state->renderer->globalDescriptorPool,
+		0
+	);
+
+	// 🔹 reallocate ALL descriptor sets from that pool
+	globalSetsCreate(state);          // global + material sets
+	presentDescriptorSetAllocate(state);  // presentSet
+
 	presentDescriptorSetUpdate(state);
+
 	guiFramebuffersCreate(state);
 	ImGui_ImplVulkan_SetMinImageCount(state->window.swapchain.imageCount);
 	commandBufferRecord(state);
-};
+
+}

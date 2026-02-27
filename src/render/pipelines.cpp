@@ -143,8 +143,8 @@ void opaquePipelineCreate(State* state) {
 	};
 
 	VkDescriptorSetLayout setLayouts[] = {
-	state->renderer->descriptorSetLayout,   // set = 0
-	state->renderer->textureSetLayout   // set = 1
+	state->renderer->globalSetLayout,   // set = 0
+	state->renderer->materialSetLayout   // set = 1
 	};
 	//PipelineLayout
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo{
@@ -336,8 +336,8 @@ void transparencyPipelineCreate(State* state) {
 
 
 	std::array<VkDescriptorSetLayout, 2> setLayouts = {
-		state->renderer->descriptorSetLayout,     // set = 0 (UBO)
-		state->renderer->textureSetLayout    // set = 1 (textures)
+		state->renderer->globalSetLayout,     // set = 0 (UBO)
+		state->renderer->materialSetLayout    // set = 1 (textures)
 	};
 
 	VkPushConstantRange pushRange{};
