@@ -5,6 +5,9 @@
 
 struct State;
 
+void skyboxPipelineCreate(State* state);
+void skyboxPipelineDestroy(State * state);
+
 void opaquePipelineCreate(State* state);
 void opaquePipelineDestroy(State* state);
 

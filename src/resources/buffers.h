@@ -36,3 +36,6 @@ void vertexBufferDestroy(State* state);
 void indexBufferCreateForMesh(State* state, const std::vector<uint32_t>& indices, VkBuffer& indexBuffer, VkDeviceMemory& indexMemory);
 
 void indexBufferDestroy(State* state);
+
+void createSkyboxVbo(State* state);
+void destroySkyboxVbo(State* state);

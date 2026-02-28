@@ -45,6 +45,7 @@ layout(set = 0, binding = 0) uniform UniformBufferObject {
 } ubo;
 layout(set = 0, binding = 1) uniform samplerCube envMap;
 layout(set = 0, binding = 2) uniform sampler2D sceneColor;
+layout(set = 0, binding = 3) uniform sampler2D sceneDepth;
 
 
 // ─────────────────────────────────────────────
@@ -67,6 +68,7 @@ layout(location = 3) out vec3 fragWorldPos;
 layout(location = 4) out vec3 fragNormal;
 layout(location = 5) out vec3 fragTangent;
 layout(location = 6) out vec3 fragBitangent;
+layout(location = 7) out vec2 fragSceneUV;
 
 void main() {
     mat4 modelNode = ubo.model * pc.nodeMatrix;
@@ -88,5 +90,9 @@ void main() {
     fragTexCoordVS0 = inTexCoord0;
     fragTexCoordVS1 = inTexCoord1;
 
-    gl_Position = ubo.proj * ubo.view * worldPos;
+     vec4 clip = ubo.proj * ubo.view * worldPos;
+    vec3 ndc  = clip.xyz / clip.w;
+    fragSceneUV = ndc.xy * 0.5 + 0.5;
+
+    gl_Position = clip;
 }

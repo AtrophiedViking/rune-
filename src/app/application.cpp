@@ -32,6 +32,7 @@ void init(State *state) {
 	state->scene->camera->updateCameraVectors();
 	windowCreate(state);
 	deviceCreate(state);
+	commandPoolCreate(state);
 
 	swapchainCreate(state);
 	swapchainImageGet(state);
@@ -50,11 +51,14 @@ void init(State *state) {
 	materialSetLayoutCreate(state);
 	presentSetLayoutCreate(state);
 
+	createSkyboxVbo(state);
+
+
+	skyboxPipelineCreate(state);
 	opaquePipelineCreate(state);
 	transparencyPipelineCreate(state);
 	presentPipelineCreate(state);
 
-	commandPoolCreate(state);
 
 	printf("init: msaaSamples = %d\n", state->config->msaaSamples);
 
@@ -80,27 +84,12 @@ void init(State *state) {
 
 	// Load model + textures BEFORE descriptor sets
 
-
-	loadModel(state, state->config->KOBOLD_MODEL_PATH);
-	state->scene->models[0]->setTransform(
-		{ 0.0f, 0.0f, 0.0f },   // position
-		{ 0.0f, 0.0f, 0.0f },    // rotation
-		{ 1.0f, 1.0f, 1.0f }     // scale
-	);
 	loadModel(state, state->config->MODEL_PATH);
-	state->scene->models[1]->setTransform(
-		{ 0.5f, 0.5f, 0.0f },
-		{ 0.0f, 0.0f, 0.0f },
-		{ 5.0f, 5.0f, 5.0f }
-	);
-
-	loadModel(state, state->config->HOVER_BIKE_MODEL_PATH);
-	state->scene->models[2]->setTransform(
-		{ 0.0f, -1.0f, 0.0f },
-		{ 0.0f, 0.0f, 0.0f },
+	state->scene->models[0]->setTransform(
+		{ 1.0f, -1.0f, 0.0f },
+		{ 0.0f, -90.0f, 0.0f },
 		{ 1.0f, 1.0f, 1.0f }
 	);
-
 
 	uniformBuffersCreate(state);
 
@@ -134,9 +123,7 @@ void mainloop(State *state) {
 };
 
 void cleanup(State *state) {
-	vkDestroyShaderModule(state->context->device, state->renderer->fragShaderModule, nullptr);
 	vkDestroyShaderModule(state->context->device, state->renderer->vertShaderModule, nullptr);
-	vkDestroyShaderModule(state->context->device, state->renderer->opaqueFragShaderModule, nullptr);
 
 	swapchainCleanup(state);
 

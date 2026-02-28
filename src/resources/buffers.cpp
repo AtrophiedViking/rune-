@@ -3,6 +3,7 @@
 #include "render/renderer.h"
 #include "core/context.h"
 #include "core/state.h"
+#include "scene/skybox.h"
 #include "scene/mesh.h"
 #include <stdexcept>
 
@@ -139,3 +140,49 @@ void indexBufferDestroy(State* state) {
 	vkDestroyBuffer(state->context->device, state->buffers->indexBuffer, nullptr);
 	vkFreeMemory(state->context->device, state->buffers->indexBufferMemory, nullptr);
 };
+
+void createSkyboxVbo(State* state)
+{
+	VkDeviceSize bufferSize = sizeof(skyboxVertices[0]) * skyboxVertices.size();
+
+	VkBuffer stagingBuffer;
+	VkDeviceMemory stagingBufferMemory;
+
+	// 1. Create staging buffer
+	createBuffer(
+		state,
+		bufferSize,
+		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+		stagingBuffer,
+		stagingBufferMemory
+	);
+
+	// 2. Copy vertex data into staging buffer
+	void* data;
+	vkMapMemory(state->context->device, stagingBufferMemory, 0, bufferSize, 0, &data);
+	memcpy(data, skyboxVertices.data(), (size_t)bufferSize);
+	vkUnmapMemory(state->context->device, stagingBufferMemory);
+
+	// 3. Create device-local vertex buffer
+	createBuffer(
+		state,
+		bufferSize,
+		VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+		state->renderer->skyboxVbo,
+		state->renderer->skyboxVboMemory
+	);
+
+	// 4. Copy staging → device-local
+	copyBuffer(state, stagingBuffer, state->renderer->skyboxVbo, bufferSize);
+
+	// 5. Cleanup staging
+	vkDestroyBuffer(state->context->device, stagingBuffer, nullptr);
+	vkFreeMemory(state->context->device, stagingBufferMemory, nullptr);
+}
+void destroySkyboxVbo(State* state)
+{
+	vkDestroyBuffer(state->context->device, state->renderer->skyboxVbo, nullptr);
+	vkFreeMemory(state->context->device, state->renderer->skyboxVboMemory, nullptr);
+}

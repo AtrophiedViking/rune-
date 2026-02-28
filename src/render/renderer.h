@@ -45,20 +45,33 @@ struct Renderer {
 	std::vector<VkDeviceMemory> uniformBuffersMemory;
 	std::vector<void*> uniformBuffersMapped;
 
+	VkBuffer skyboxVbo;
+	VkDeviceMemory skyboxVboMemory;
+
+
 	//Shaders
 	VkShaderModule vertShaderModule;
-	VkShaderModule fragShaderModule;
+
+	VkShaderModule skyboxVertShaderModule;
+	VkShaderModule skyboxFragShaderModule;
+
+	VkShaderModule transparentFragShaderModule;
+
 	VkShaderModule opaqueFragShaderModule;
+
 	VkShaderModule presentFragShaderModule;
 	VkShaderModule presentVertShaderModule;
 
+	//Command Pool
 	VkCommandPool commandPool;
 
 
 
 	//opaque Pipeline
 	VkPipeline opaquePipeline;
+	VkPipeline skyboxPipeline;
 	VkPipelineLayout opaquePipelineLayout;
+	VkPipelineLayout skyboxPipelineLayout;
 	VkRenderPass opaqueRenderPass;
 
 	//transparency Pipeline

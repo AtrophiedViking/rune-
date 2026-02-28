@@ -159,6 +159,9 @@
     <ClCompile Include="src\loader\ktx_cubemap.cpp">
       <Filter>src\loader</Filter>
     </ClCompile>
+    <ClCompile Include="src\scene\skybox.cpp">
+      <Filter>src\scene</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\core\state.h">
@@ -293,21 +296,30 @@
     <ClInclude Include="src\loader\ktx_cubemap.h">
       <Filter>src\loader</Filter>
     </ClInclude>
+    <ClInclude Include="src\scene\skybox.h">
+      <Filter>src\scene</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <None Include="res\shaders\frag.spv">
+    <None Include="res\shaders\opaque.frag">
       <Filter>res\shaders</Filter>
     </None>
-    <None Include="res\shaders\vert.spv">
+    <None Include="res\shaders\present.frag">
       <Filter>res\shaders</Filter>
     </None>
-    <None Include="res\shaders\present_frag.spv">
+    <None Include="res\shaders\present.vert">
       <Filter>res\shaders</Filter>
     </None>
-    <None Include="res\shaders\present_vert.spv">
+    <None Include="res\shaders\shader.vert">
       <Filter>res\shaders</Filter>
     </None>
-    <None Include="res\shaders\opaque_frag.spv">
+    <None Include="res\shaders\skybox.frag">
+      <Filter>res\shaders</Filter>
+    </None>
+    <None Include="res\shaders\skybox.vert">
+      <Filter>res\shaders</Filter>
+    </None>
+    <None Include="res\shaders\transparent.frag">
       <Filter>res\shaders</Filter>
     </None>
   </ItemGroup>

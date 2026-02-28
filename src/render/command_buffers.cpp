@@ -84,9 +84,10 @@ void commandBufferRecord(State* state)
         .x = 0.f, .y = 0.f,
         .width = (float)state->window.swapchain.imageExtent.width,
         .height = (float)state->window.swapchain.imageExtent.height,
-        .minDepth = state->scene->camera->nearClip,
-        .maxDepth = state->scene->camera->viewDistance
+        .minDepth = 0.0f,
+        .maxDepth = 1.0f
     };
+
 
     VkRect2D scissor{
         .offset = {0, 0},
@@ -119,9 +120,9 @@ void commandBufferRecord(State* state)
             opaqueItems.push_back(item);
     }
 
-    // ─────────────────────────────────────────────
-    // PASS 1: OPAQUE
-    // ─────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// PASS 1: OPAQUE
+// ─────────────────────────────────────────────
     std::array<VkClearValue, 2> clearValues{};
     clearValues[0].color = { state->config->backgroundColor.color };
     clearValues[1].depthStencil = { 1.0f, 0 };
@@ -139,7 +140,27 @@ void commandBufferRecord(State* state)
     vkCmdSetViewport(cmd, 0, 1, &viewport);
     vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-    // 🔹 global set = 0
+    // 🔹 SKYBOX FIRST
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, state->renderer->skyboxPipeline);
+
+    vkCmdBindDescriptorSets(
+        cmd,
+        VK_PIPELINE_BIND_POINT_GRAPHICS,
+        state->renderer->skyboxPipelineLayout,
+        0, 1,
+        &state->renderer->globalSets[frameIndex],
+        0, nullptr
+    );
+
+    VkDeviceSize skyboxOffset = 0;
+    vkCmdBindVertexBuffers(cmd, 0, 1, &state->renderer->skyboxVbo, &skyboxOffset);
+
+    // draw 3 vertices (no index buffer)
+    vkCmdDraw(cmd, 3, 1, 0, 0);
+
+    // 🔹 NOW OPAQUE PBR
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, state->renderer->opaquePipeline);
+
     vkCmdBindDescriptorSets(
         cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
         state->renderer->opaquePipelineLayout,
@@ -147,8 +168,6 @@ void commandBufferRecord(State* state)
         &state->renderer->globalSets[frameIndex],
         0, nullptr
     );
-
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, state->renderer->opaquePipeline);
 
     for (auto& item : opaqueItems)
     {

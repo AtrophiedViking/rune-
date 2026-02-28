@@ -97,7 +97,7 @@ layout(location = 3) in vec3 fragWorldPos;
 layout(location = 4) in vec3 fragNormal;
 layout(location = 5) in vec3 fragTangent;
 layout(location = 6) in vec3 fragBitangent;
-
+layout(location = 7) in vec2 fragSceneUV;
 // ─────────────────────────────────────────────
 // Output
 // ─────────────────────────────────────────────
@@ -251,6 +251,13 @@ vec3 applyVolumeToTransmission(vec3 transmittedColor)
     return transmittedColor * att;
 }
 
+vec3 sampleEnvironment(vec3 dirWS)
+{
+    vec3 envDir = normalize(dirWS);
+    return texture(envMap, envDir).rgb; // assumed linear HDR
+}
+
+
 
 // ─────────────────────────────────────────────
 // Main
@@ -264,7 +271,7 @@ void main()
     if (hasBaseColorTex) {
         vec2 uvBase = getUV(getTexCoordIndex(uMat.baseColorTT));
         uvBase = applyTextureTransform(uvBase, uMat.baseColorTT);
-        vec4 baseSample = texture(baseColorTex, uvBase);
+        vec4 baseSample = texture(baseColorTex, uvBase);   // sRGB in texture
         baseColor = baseSample * pc.baseColorFactor;
     } else {
         baseColor = pc.baseColorFactor;
@@ -286,7 +293,7 @@ void main()
     if (hasMRTex) {
         vec2 uvMR = getUV(getTexCoordIndex(uMat.mrTT));
         uvMR = applyTextureTransform(uvMR, uMat.mrTT);
-        vec3 mrSample = texture(metallicRoughnessTex, uvMR).rgb;
+        vec3 mrSample = texture(metallicRoughnessTex, uvMR).rgb; // linear
         metallic  = clamp(mrSample.b * pc.metallicFactor, 0.0, 1.0);
         roughness = clamp(mrSample.g * pc.roughnessFactor, 0.04, 1.0);
     } else {
@@ -301,40 +308,60 @@ void main()
     if (hasOccTex) {
         vec2 uvOcc = getUV(getTexCoordIndex(uMat.occlusionTT));
         uvOcc = applyTextureTransform(uvOcc, uMat.occlusionTT);
-        occlusion = texture(occlusionTex, uvOcc).r;
+        occlusion = texture(occlusionTex, uvOcc).r; // linear
     } else {
         occlusion = 1.0;
     }
 
-    // Emissive (optional)
+    // Emissive (optional) - linear
     bool hasEmissiveTex = (uMat.emissiveTT.rot_center_tex.w >= 0.0);
 
     vec3 emissive;
     if (hasEmissiveTex) {
         vec2 uvEm = getUV(getTexCoordIndex(uMat.emissiveTT));
         uvEm = applyTextureTransform(uvEm, uMat.emissiveTT);
-        emissive = texture(emissiveTex, uvEm).rgb;
+        emissive = texture(emissiveTex, uvEm).rgb; // linear texture
     } else {
         emissive = vec3(0.0);
     }
 
-    // Normal (optional via getNormalFromMap)
-    vec3 N = getNormalFromMap();
-    vec3 V = normalize(ubo.camPos.xyz - fragWorldPos);
+    // Normal + view + reflection (world space)
+    vec3 N = getNormalFromMap();                       // world space
+    vec3 V = normalize(ubo.camPos.xyz - fragWorldPos); // world space
+    vec3 R = reflect(-V, N);                           // world space
 
     // Base reflectance from IOR + metallic
-    vec3 albedo = pow(baseColor.rgb * fragColorVS, vec3(2.2));
-    
+    vec3 baseLinear = pow(baseColor.rgb, vec3(2.2)); // sRGB -> linear
+    vec3 albedo     = baseLinear * fragColorVS;      // vertex color already linear
+
     float F0_scalar = IorToF0(uMat.ior);
     vec3  F0        = vec3(F0_scalar);
-    
+
+    // --- FIX #1: clamp F0 so specular isn't overpowering ---
+    F0 = clamp(F0, 0.02, 0.08);
+
     // Metallic overrides F0 toward albedo
     F0 = mix(F0, albedo, metallic);
-    
+
+    // --- IBL from envMap (single cube) ---
+    vec3 envSpec = sampleEnvironment(R);
+    vec3 envDiff = sampleEnvironment(N);
+
+    float NdotV = max(dot(N, V), 0.0);
+    vec3  Fview = FresnelSchlick(NdotV, F0);
+    vec3  kS    = Fview;
+    vec3  kD    = (vec3(1.0) - kS) * (1.0 - metallic);
+
+    // --- FIX #2: boost diffuse IBL so object isn't a mirror ---
+    vec3 iblDiffuse  = envDiff * albedo * 1.5;
+
+    vec3 iblSpecular = envSpec * Fview;
+    vec3 ibl         = kD * iblDiffuse + iblSpecular;
+
     // Direct lighting
     vec3 Lo = vec3(0.0);
     for (int i = 0; i < 4; ++i) {
-        vec3 Lpos = ubo.lightPositions[i].xyz;
+        vec3 Lpos   = ubo.lightPositions[i].xyz;
         float radius = ubo.lightPositions[i].w;
         vec3 Lcolor = ubo.lightColors[i].rgb * ubo.lightColors[i].w;
 
@@ -355,46 +382,45 @@ void main()
         float G   = GeometrySmith(N, V, L, roughness);
         vec3  F   = FresnelSchlick(max(dot(H, V), 0.0), F0);
 
-        vec3 numerator    = NDF * G * F;
-        float denom       = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 1e-4;
-        vec3 specular     = numerator / denom;
+        vec3 numerator = NDF * G * F;
+        float denom    = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 1e-4;
+        vec3 specular  = numerator / denom;
 
-        vec3 kS = F;
-        vec3 kD = (vec3(1.0) - kS) * (1.0 - metallic);
+        vec3 kS_l = F;
+        vec3 kD_l = (vec3(1.0) - kS_l) * (1.0 - metallic);
 
         float NdotL = max(dot(N, L), 0.0);
         vec3  radiance = Lcolor * scalerAttenuation;
 
-        Lo += (kD * albedo / 3.14159265 + specular) * radiance * NdotL;
+        Lo += (kD_l * albedo / 3.14159265 + specular) * radiance * NdotL;
     }
 
-    vec3 ambient = albedo * 0.03 * occlusion;
-    vec3 color = ambient + Lo + emissive;
-
-    color = vec3(1.0) - exp(-color * ubo.exposure);
-    color = pow(color, vec3(1.0 / ubo.gamma));
+    // No old ambient; use IBL instead
+    vec3 lit = ibl + Lo;
 
     float transmission = getTransmission();
 
-if (transmission > 0.0) {
-    // Fresnel at view angle
-    float NdotV = max(dot(N, V), 0.0);
-    vec3 Fview = FresnelSchlick(NdotV, F0);
+    // Optional simple env-only transmission (no screen-space here)
+    if (transmission > 0.0) {
+        float NdotV_t = max(dot(N, V), 0.0);
+        vec3 Fview_t  = FresnelSchlick(NdotV_t, F0);
 
-    // Refracted direction
-    vec3 R = refract(-V, N, 1.0 / uMat.ior);
+        vec3 Rt = refract(-V, N, 1.0 / uMat.ior);
+        vec3 refractedColor = sampleEnvironment(Rt); // linear
 
-    // Sample environment or background along refracted ray
-    // Replace sampleEnvironment() with your actual env/background sampling
-    vec3 refractedColor = sampleEnvironment(R);
+        refractedColor = applyVolumeToTransmission(refractedColor);
 
-    // Apply volume attenuation (thickness + attenuationColor)
-    refractedColor = applyVolumeToTransmission(refractedColor);
+        float transWeight = transmission * (1.0 - Fview_t.r);
+        lit = mix(lit, refractedColor, transWeight);
+    }
 
-    // Mix opaque shading with refraction using Fresnel + transmission
-    float transWeight = transmission * (1.0 - Fview.r);
-    color = mix(color, refractedColor, transWeight);
-}
+    // Tone map + gamma on lit part only
+    vec3 color = vec3(1.0) - exp(-lit * ubo.exposure);
+    color = pow(color, vec3(1.0 / ubo.gamma));
+
+    // Add emissive AFTER tone mapping (emissive is linear)
+    color += emissive;
+
     float alpha = baseColor.a;
     outColor = vec4(color, alpha);
 }

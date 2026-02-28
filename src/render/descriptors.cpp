@@ -451,7 +451,7 @@ void materialSetsCreate(State* state)
 		const Texture& transTex = resolveTex(mat->transmissionTextureIndex);
 		const Texture& thickTex = resolveTex(mat->thicknessTextureIndex);
 
-
+		
 		// MaterialGPU UBO
 		MaterialGPU gpu{};
 		gpu.baseColorTT = toGPU(mat->baseColorTransform);
@@ -771,8 +771,7 @@ void uniformBuffersUpdate(State* state) {
 	float aspect = static_cast<float>(state->window.swapchain.imageExtent.width) /
 		static_cast<float>(state->window.swapchain.imageExtent.height);
 
-	glm::mat4 proj = state->scene->camera->getProjectionMatrix(aspect, 0.1f, 20.0f);
-	proj[1][1] *= -1.0f; // Vulkan Y flip
+	glm::mat4 proj = state->scene->camera->getProjectionMatrix(aspect, 0.1f, 2000.0f);
 
 	// Global UBO (model is identity; node transforms come from push constants)
 	UniformBufferObject ubo{};
@@ -782,16 +781,16 @@ void uniformBuffersUpdate(State* state) {
 
 	// Lights
 	ubo.lightPositions[0] = glm::vec4(5.0f, 5.0f, 0.0f, 0.0f);
-	ubo.lightColors[0] = glm::vec4(300.0f, 300.0f, 300.0f, 1.0f);
+	ubo.lightColors[0] = glm::vec4(300.0f, 300.0f, 300.0f, 0.0f);
 
 	ubo.lightPositions[1] = glm::vec4(0.0f, 5.0f, 5.0f, 0.0f);
-	ubo.lightColors[1] = glm::vec4(0.0f, 0.0f, 300.0f, 1.0f);
+	ubo.lightColors[1] = glm::vec4(0.0f, 0.0f, 300.0f, 0.0f);
 
 	ubo.lightPositions[2] = glm::vec4(5.0f, 0.0f, 5.0f, 0.0f);
-	ubo.lightColors[2] = glm::vec4(300.0f, 0.0f, 0.0f, 1.0f);
+	ubo.lightColors[2] = glm::vec4(300.0f, 0.0f, 0.0f, 0.0f);
 
 	ubo.lightPositions[3] = glm::vec4(0.0f, 5.0f, 0.0f, 0.0f);
-	ubo.lightColors[3] = glm::vec4(0.0f, 300.0f, 0.0f, 1.0f);
+	ubo.lightColors[3] = glm::vec4(0.0f, 300.0f, 0.0f, 0.0f);
 
 	// Camera position
 	ubo.camPos = glm::vec4(state->scene->camera->getPosition(), 1.0f);

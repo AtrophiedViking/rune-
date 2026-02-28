@@ -1,4 +1,4 @@
-#pragma once
+ #pragma once
 struct State;
 void init(State* state);
 void mainloop(State* state);

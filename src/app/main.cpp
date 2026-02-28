@@ -14,9 +14,7 @@ Config config
 			.msaaSamples = VK_SAMPLE_COUNT_1_BIT,
 			.DEFAULT_CUBEMAP = "./res/cubemaps/default_cubemap.ktx2",
 			.DEFAULT_TEXTURE_PATH = "./res/textures/default_texture.ktx2",
-			.KOBOLD_MODEL_PATH = "./res/models/GlassBrokenWindow.glb",
-			.HOVER_BIKE_MODEL_PATH = "./res/models/DragonAttenuation.glb",
-			.MODEL_PATH = "./res/models/MosquitoInAmber.glb",
+			.MODEL_PATH = "./res/models/DragonAttenuation.glb",
 };
 
 int main() {
