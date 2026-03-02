@@ -81,6 +81,7 @@ void deviceCreate(State* state) {
 
 	const char* deviceExtensions{ VK_KHR_SWAPCHAIN_EXTENSION_NAME };
 	VkPhysicalDeviceFeatures deviceFeatures{
+		.independentBlend  = VK_TRUE,
 		.sampleRateShading = VK_TRUE,
 		.samplerAnisotropy = VK_TRUE,
 	};

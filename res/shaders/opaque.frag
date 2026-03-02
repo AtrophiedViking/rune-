@@ -47,6 +47,13 @@ layout(set = 0, binding = 0) uniform UniformBufferObject {
     float scaleIBLAmbient;          // unused here
 } ubo;
 layout(set = 0, binding = 1) uniform samplerCube envMap;
+layout(set = 0, binding = 2) uniform sampler2D sceneColor;
+layout(set = 0, binding = 3) uniform sampler2D sceneDepth;
+
+layout(set = 0, binding = 4) uniform samplerCube envIrradiance;
+layout(set = 0, binding = 5) uniform samplerCube envSpecular;
+layout(set = 0, binding = 6) uniform sampler2D brdfLUT;
+
 // ─────────────────────────────────────────────
 // UBO (set = 1, binding = 0)
 // ─────────────────────────────────────────────
@@ -106,6 +113,26 @@ layout(location = 0) out vec4 outColor;
 // ─────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────
+
+vec3 computeViewDirWorld(vec3 worldPos)
+{
+    // view-space position of the fragment
+    vec3 posVS = (ubo.view * vec4(worldPos, 1.0)).xyz;
+
+    // view-space view vector: from fragment to camera (camera at origin)
+    vec3 Vvs = normalize(-posVS);
+
+    // extract rotation from view (world→view)
+    mat3 viewRot = mat3(ubo.view);
+
+    // inverse rotation (view→world)
+    mat3 invRot = transpose(viewRot);
+
+    // world-space view vector that *does* depend on camera orientation
+    return normalize(invRot * Vvs);
+}
+
+
 vec2 getUV(int setIndex)
 {
     return (setIndex == 0) ? fragTexCoordVS0 : fragTexCoordVS1;
@@ -326,37 +353,46 @@ void main()
     }
 
     // Normal + view + reflection (world space)
-    vec3 N = getNormalFromMap();                       // world space
-    vec3 V = normalize(ubo.camPos.xyz - fragWorldPos); // world space
-    vec3 R = reflect(-V, N);                           // world space
+    vec3 N = getNormalFromMap();
+
+    // Derive camera position from view matrix (world space)
+    vec3 V = computeViewDirWorld(fragWorldPos);
+    vec3 R = reflect(-V, N);
+    
+                           // world space
 
     // Base reflectance from IOR + metallic
-    vec3 baseLinear = pow(baseColor.rgb, vec3(2.2)); // sRGB -> linear
+    vec3 baseLinear = baseColor.rgb; // sRGB -> linear
     vec3 albedo     = baseLinear * fragColorVS;      // vertex color already linear
 
     float F0_scalar = IorToF0(uMat.ior);
     vec3  F0        = vec3(F0_scalar);
 
-    // --- FIX #1: clamp F0 so specular isn't overpowering ---
-    F0 = clamp(F0, 0.02, 0.08);
 
     // Metallic overrides F0 toward albedo
     F0 = mix(F0, albedo, metallic);
 
-    // --- IBL from envMap (single cube) ---
-    vec3 envSpec = sampleEnvironment(R);
-    vec3 envDiff = sampleEnvironment(N);
-
+    // ─────────────────────────────────────────────
+    // Proper glTF IBL (split-sum)
+    // ─────────────────────────────────────────────
+    
+    // 1. Diffuse irradiance (convolved env)
+    vec3 diffIBL = texture(envIrradiance, N).rgb;
+    
+    // 2. Prefiltered specular env (mip chain)
+    float mip = roughness * ubo.prefilteredCubeMipLevels;
+    vec3 prefiltered = textureLod(envSpecular, R, mip).rgb;
+    
+    // 3. BRDF LUT (2D RG)
     float NdotV = max(dot(N, V), 0.0);
-    vec3  Fview = FresnelSchlick(NdotV, F0);
-    vec3  kS    = Fview;
-    vec3  kD    = (vec3(1.0) - kS) * (1.0 - metallic);
+    vec2 brdf = texture(brdfLUT, vec2(NdotV, roughness)).rg;
+    
+    // 4. Specular IBL
+    vec3 specIBL = prefiltered * (F0 * brdf.x + brdf.y);
+    
+    // 5. Final IBL
+    vec3 ibl = (1.0 - metallic) * diffIBL * albedo + specIBL;
 
-    // --- FIX #2: boost diffuse IBL so object isn't a mirror ---
-    vec3 iblDiffuse  = envDiff * albedo * 1.5;
-
-    vec3 iblSpecular = envSpec * Fview;
-    vec3 ibl         = kD * iblDiffuse + iblSpecular;
 
     // Direct lighting
     vec3 Lo = vec3(0.0);

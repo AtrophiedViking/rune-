@@ -45,13 +45,30 @@ void createTextureFromMemory(
 	Texture& outTex);
 void destroyTextures(State* state);
 
-void textureImageCreate(State* state, std::string texturePath);
+void textureImageCreate(
+	State* state,
+	const std::string& texturePath,
+	VkImage& outImage,
+	VkDeviceMemory& outMemory,
+	VkFormat& outFormat,
+	uint32_t& outMipLevels
+);
 void textureImageDestroy(State* state);
 
-void textureImageViewCreate(State* state);
+void textureImageViewCreate(
+	State* state,
+	VkImage image,
+	VkFormat format,
+	VkImageAspectFlags aspectMask,
+	uint32_t mipLevels,
+	VkImageView& outView);
 void textureImageViewDestroy(State* state);
 
-void textureSamplerCreate(State* state);
+void textureSamplerCreate(
+	State* state,
+	VkSampler& outSampler,
+	float maxLod);
+
 void textureSamplerDestroy(State* state);
 
 void createModelTextures(State* state, Model* model, const tinygltf::Model& gltf, std::unordered_map<int, TextureRole>& textureRoles);

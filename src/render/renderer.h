@@ -19,6 +19,7 @@ struct Renderer {
 	std::vector<DrawItem*> transparentDrawItems;
 	std::vector<MaterialGPU> materialsGPU;
 	std::vector<MeshGPU> meshesGPU;
+	std::vector<VkImageView> computeMipViews;
 
 	//Frame Data
 	uint32_t imageAquiredIndex;
@@ -29,6 +30,11 @@ struct Renderer {
 
 	//Descriptors
 	uint32_t descriptorPoolMultiplier = 2;
+	//IBL descriptors
+	VkDescriptorPool iblDescriptorPool;
+	VkDescriptorSetLayout iblSetLayout;
+	std::vector<VkDescriptorSet> iblSets;
+	
 	//Global descriptors
 	VkDescriptorPool globalDescriptorPool;
 	VkDescriptorSetLayout globalSetLayout;
@@ -66,6 +72,9 @@ struct Renderer {
 	VkCommandPool commandPool;
 
 
+	//Compute Pipelines
+	VkPipeline iblPipeline;
+	VkPipelineLayout iblPipelineLayout;
 
 	//opaque Pipeline
 	VkPipeline opaquePipeline;

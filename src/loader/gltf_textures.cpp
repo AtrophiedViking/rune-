@@ -365,51 +365,105 @@ void destroyTextures(State* state) {
     state->scene->textures.clear();
 }
 
-void textureImageCreate(State* state, std::string texturePath) {
-    // Load KTX2 texture instead of using stb_image
+void textureImageCreate(
+    State* state,
+    const std::string& texturePath,
+    VkImage& outImage,
+    VkDeviceMemory& outMemory,
+    VkFormat& outFormat,
+    uint32_t& outMipLevels
+) {
+    // Load KTX2
     ktxTexture* kTexture;
     KTX_error_code result = ktxTexture_CreateFromNamedFile(
         texturePath.c_str(),
         KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT,
-        &kTexture);
+        &kTexture
+    );
 
     if (result != KTX_SUCCESS) {
         throw std::runtime_error("failed to load ktx texture image!");
     }
 
-    // Get texture dimensions and data
     uint32_t texWidth = kTexture->baseWidth;
     uint32_t texHeight = kTexture->baseHeight;
-    ktx_size_t imageSize = ktxTexture_GetImageSize(kTexture, 0);
-    ktx_uint8_t* ktxTextureData = ktxTexture_GetData(kTexture);
 
-    VkFormat textureFormat = ktxTexture_GetVkFormat(kTexture);
+    outMipLevels = kTexture->numLevels;
+    outFormat = ktxTexture_GetVkFormat(kTexture);
 
-    // Save the actual format used for image creation so image views use the
-    // identical format (required by Vulkan unless VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT).
-    state->texture->format = textureFormat;
+    ktx_size_t imageSize = ktxTexture_GetDataSize(kTexture);
+    ktx_uint8_t* ktxData = ktxTexture_GetData(kTexture);
 
-    state->texture->mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(texWidth, texHeight)))) + 1;
-
+    // Staging buffer
     VkBuffer stagingBuffer;
-    VkDeviceMemory stagingBufferMemory;
+    VkDeviceMemory stagingMemory;
 
-    createBuffer(state, imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+    createBuffer(
+        state,
+        imageSize,
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        stagingBuffer,
+        stagingMemory
+    );
 
     void* data;
-    vkMapMemory(state->context->device, stagingBufferMemory, 0, imageSize, 0, &data);
-    memcpy(data, ktxTextureData, imageSize);
-    vkUnmapMemory(state->context->device, stagingBufferMemory);
+    vkMapMemory(state->context->device, stagingMemory, 0, imageSize, 0, &data);
+    memcpy(data, ktxData, imageSize);
+    vkUnmapMemory(state->context->device, stagingMemory);
 
-    imageCreate(state, texWidth, texHeight, textureFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, state->texture->textureImage, state->texture->textureImageMemory, state->texture->mipLevels, VK_SAMPLE_COUNT_1_BIT);
+    // Create 2D image
+    imageCreate(
+        state,
+        texWidth,
+        texHeight,
+        outFormat,
+        VK_IMAGE_TILING_OPTIMAL,
+        VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        outImage,
+        outMemory,
+        outMipLevels,
+        VK_SAMPLE_COUNT_1_BIT
+    );
 
-    transitionImageLayout(state, state->texture->textureImage, textureFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, state->texture->mipLevels, 1);
-    copyBufferToImage(state, stagingBuffer, state->texture->textureImage, static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
+    // Transition to TRANSFER_DST
+    transitionImageLayout(
+        state,
+        outImage,
+        outFormat,
+        VK_IMAGE_LAYOUT_UNDEFINED,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        outMipLevels,
+        1
+    );
+
+    // Copy buffer → image
+    copyBufferToImage(
+        state,
+        stagingBuffer,
+        outImage,
+        texWidth,
+        texHeight
+    );
+
+    // Transition to SHADER_READ_ONLY
+    transitionImageLayout(
+        state,
+        outImage,
+        outFormat,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        outMipLevels,
+        1
+    );
+
     vkDestroyBuffer(state->context->device, stagingBuffer, nullptr);
-    vkFreeMemory(state->context->device, stagingBufferMemory, nullptr);
-    generateMipmaps(state, state->texture->textureImage, textureFormat, texWidth, texHeight, state->texture->mipLevels);
+    vkFreeMemory(state->context->device, stagingMemory, nullptr);
+
     ktxTexture_Destroy(kTexture);
-};
+}
+
 void textureImageDestroy(State* state) {
     if (state->texture->textureImage != VK_NULL_HANDLE)
         vkDestroyImage(state->context->device, state->texture->textureImage, nullptr);
@@ -418,22 +472,35 @@ void textureImageDestroy(State* state) {
         vkFreeMemory(state->context->device, state->texture->textureImageMemory, nullptr);
 };
 
-void textureImageViewCreate(State* state) {
-    // Use the exact VkFormat the image was created with.
-    VkFormat viewFormat = state->texture->format;
-    if (viewFormat == VK_FORMAT_UNDEFINED) {
-        // Fallback, but ideally format should always be set when image is created.
-        viewFormat = VK_FORMAT_R8G8B8A8_SRGB;
-    }
-    state->texture->textureImageView = imageViewCreate(state, state->texture->textureImage, viewFormat, VK_IMAGE_ASPECT_COLOR_BIT, state->texture->mipLevels);
-};
+void textureImageViewCreate(
+    State* state,
+    VkImage image,
+    VkFormat format,
+    VkImageAspectFlags aspectMask,
+    uint32_t mipLevels,
+    VkImageView& outView)
+{
+    outView = imageViewCreate(
+        state,
+        image,
+        format,
+        aspectMask,
+        mipLevels
+    );
+}
+
 void textureImageViewDestroy(State* state) {
     vkDestroyImageView(state->context->device, state->texture->textureImageView, nullptr);
 };
 
-void textureSamplerCreate(State* state) {
+void textureSamplerCreate(
+    State* state,
+    VkSampler& outSampler,
+    float maxLod)
+{
     VkPhysicalDeviceProperties properties{};
     vkGetPhysicalDeviceProperties(state->context->physicalDevice, &properties);
+
     VkSamplerCreateInfo samplerInfo{};
     samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
     samplerInfo.magFilter = VK_FILTER_LINEAR;
@@ -450,10 +517,13 @@ void textureSamplerCreate(State* state) {
     samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
     samplerInfo.mipLodBias = 0.0f;
     samplerInfo.minLod = 0.0f;
-    samplerInfo.maxLod = VK_LOD_CLAMP_NONE;
+    samplerInfo.maxLod = maxLod;
 
-    PANIC(vkCreateSampler(state->context->device, &samplerInfo, nullptr, &state->texture->textureSampler), "failed to create texture sampler!");
-};
+    PANIC(
+        vkCreateSampler(state->context->device, &samplerInfo, nullptr, &outSampler),
+        "failed to create texture sampler!"
+    );
+}
 void textureSamplerDestroy(State* state) {
     vkDestroySampler(state->context->device, state->texture->textureSampler, nullptr);
 };
@@ -502,9 +572,9 @@ void createModelTextures(State* state, Model* model, const tinygltf::Model& gltf
         // No images in glTF → use fallback texture
         Texture* tex = new Texture{};
 
-        textureImageCreate(state, state->config->DEFAULT_TEXTURE_PATH);
-        textureImageViewCreate(state);
-        textureSamplerCreate(state);
+        textureImageCreate(state, state->config->DEFAULT_TEXTURE_PATH, state->texture->textureImage, state->texture->textureImageMemory, state->texture->format, state->texture->mipLevels);
+        textureImageViewCreate(state, state->texture->textureImage, state->texture->format, VK_IMAGE_ASPECT_COLOR_BIT, state->texture->mipLevels, state->texture->textureImageView);
+        textureSamplerCreate(state, state->texture->textureSampler, state->texture->mipLevels);
 
         tex->textureImageView = state->texture->textureImageView;
         tex->textureSampler = state->texture->textureSampler;

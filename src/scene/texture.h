@@ -31,8 +31,11 @@ struct Texture{
 	VkDeviceMemory cubeImageMemory;
 	VkImageView cubeImageView;
 	VkSampler cubeSampler;
+	uint32_t cubeMipLevels;
+
 
 	uint32_t mipLevels;
+
 
 	VkImage colorImage;
 	VkDeviceMemory colorImageMemory;
@@ -63,9 +66,43 @@ struct Texture{
 	VkDeviceMemory sceneDepthImageMemory;
 	VkImageView    sceneDepthImageView;
 	VkSampler	   sceneDepthSampler;
+	
+	VkImage        irradianceImage;
+	VkDeviceMemory irradianceImageMemory;
+	VkImageView    irradianceImageView;
+	VkSampler	   irradianceSampler;
+	uint32_t	   irradianceMipLevels;
+	VkFormat	   irradianceFormat;
+
+	
+	VkImage        computeImage;
+	VkDeviceMemory computeImageMemory;
+	VkImageView    computeImageView;
+	VkSampler	   computeSampler;
+	uint32_t	   computeMipLevels;
+
+	VkImage        specularImage;
+	VkDeviceMemory specularImageMemory;
+	VkImageView    specularImageView;
+	VkSampler	   specularSampler;
+	uint32_t       specularMipLevels;
+	VkFormat	   specularFormat;
+
+	
+	VkImage        lutImage;
+	VkDeviceMemory lutImageMemory;
+	VkImageView    lutImageView;
+	VkSampler	   lutSampler;
+	uint32_t	   lutMipLevels;
 
 	VkDescriptorSet descriptorSet;
 	VkFormat format;
+	
+	VkFormat envFormat;
+	uint32_t envMipLevels;
+
+
+	VkFormat lutFormat;
 
 	TextureRole role = TextureRole::BaseColor;
 };

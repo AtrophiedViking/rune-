@@ -9,6 +9,20 @@ struct Scene;
 struct State;
 
 VkResult allocateDescriptorSetsWithResize(State* state, const VkDescriptorSetAllocateInfo* allocInfo, VkDescriptorSet* sets);
+// Descriptor sets are organized into 3 sets (set = descriptor set index in shader):
+// - set 0: global UBO (binding 0), sceneColor (binding 2), sceneDepth (binding 3)
+// - set 1: material textures (baseColor at binding 0, metallicRoughness at binding 1, etc.)
+// - set 2: present pass (sceneColor at binding 2, sceneDepth at binding 3)/
+// Note: the present pass could also use the global set for sceneColor and sceneDepth, but I wanted to keep it separate to avoid conflicts with the global UBO bindings. This is a design choice and can be changed if desired.
+// Note: the global UBO could also be split into a separate set from the scene samplers, but I think it's simpler to keep them together since they are both bound at set 0 and won't have many bindings.
+
+
+// IBL descriptors (set = 0)
+void iblSetLayoutCreate(State* state);
+void iblSetLayoutDestroy(State* state);
+void iblDescriptorPoolCreate(State* state);
+void iblDescriptorPoolDestroy(State* state);
+void iblSetCreate(State* state);
 
 // set 0: global UBO
 void globalSetLayoutCreate(State* state);

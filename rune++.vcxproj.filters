@@ -301,6 +301,9 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
+    <None Include="res\shaders\ibl.comp">
+      <Filter>res\shaders</Filter>
+    </None>
     <None Include="res\shaders\opaque.frag">
       <Filter>res\shaders</Filter>
     </None>

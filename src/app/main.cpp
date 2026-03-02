@@ -13,8 +13,11 @@ Config config
 			.backgroundColor = {0.04f,0.015f,0.04f},
 			.msaaSamples = VK_SAMPLE_COUNT_1_BIT,
 			.DEFAULT_CUBEMAP = "./res/cubemaps/default_cubemap.ktx2",
+			.DEFAULT_IRRADIANCE = "./res/cubemaps/default_irradiance.ktx2",
+			.DEFAULT_SPECULAR = "./res/cubemaps/default_specular.ktx2",
+			.DEFAULT_BRDF_LUT = "./res/cubemaps/default_lut.ktx2",
 			.DEFAULT_TEXTURE_PATH = "./res/textures/default_texture.ktx2",
-			.MODEL_PATH = "./res/models/DragonAttenuation.glb",
+			.MODEL_PATH = "./res/models/kobold.glb",
 };
 
 int main() {

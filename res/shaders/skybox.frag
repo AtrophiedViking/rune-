@@ -14,8 +14,13 @@ layout(set = 0, binding = 0) uniform UBO {
     float prefilteredCubeMipLevels;
     float scaleIBLAmbient;
 } ubo;
-
 layout(set = 0, binding = 1) uniform samplerCube envMap;
+layout(set = 0, binding = 2) uniform sampler2D sceneColor;
+layout(set = 0, binding = 3) uniform sampler2D sceneDepth;
+layout(set = 0, binding = 4) uniform samplerCube envIrradiance;
+layout(set = 0, binding = 5) uniform samplerCube envSpecular;
+layout(set = 0, binding = 6) uniform sampler2D brdfLUT;
+
 
 layout(location = 0) in vec2 uv;
 layout(location = 0) out vec4 outColor;

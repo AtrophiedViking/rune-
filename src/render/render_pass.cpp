@@ -160,7 +160,7 @@ void transparentRenderPassCreate(State* state)
     accum.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     accum.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     accum.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    accum.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    accum.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     accum.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
     // 1: revealage
@@ -171,7 +171,7 @@ void transparentRenderPassCreate(State* state)
     reveal.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     reveal.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     reveal.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    reveal.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    reveal.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     reveal.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
     // 2: depth (same as before)

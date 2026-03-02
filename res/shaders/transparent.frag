@@ -49,6 +49,11 @@ layout(set = 0, binding = 0) uniform UniformBufferObject {
 layout(set = 0, binding = 1) uniform samplerCube envMap;
 layout(set = 0, binding = 2) uniform sampler2D sceneColor;
 layout(set = 0, binding = 3) uniform sampler2D sceneDepth;
+
+layout(set = 0, binding = 4) uniform samplerCube envIrradiance;
+layout(set = 0, binding = 5) uniform samplerCube envSpecular;
+layout(set = 0, binding = 6) uniform sampler2D brdfLUT;
+
 // ─────────────────────────────────────────────
 // UBO (set = 1, binding = 5)
 // ─────────────────────────────────────────────
@@ -109,6 +114,8 @@ layout(location = 1) out float outReveal; // revealage
 // ─────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────
+
+
 vec2 getUV(int setIndex)
 {
     return (setIndex == 0) ? fragTexCoordVS0 : fragTexCoordVS1;
@@ -264,6 +271,50 @@ vec3 sampleEnvironment(vec3 dirWS)
     return texture(envMap, envDir).rgb;
 }
 
+
+
+struct RefractRayWS {
+    vec3 originWS;
+    vec3 dirWS;
+    float maxDist;
+};
+
+RefractRayWS makeRefractRayWS(vec3 worldPos, vec3 N, vec3 V)
+{
+    float eta = 1.0 / uMat.ior;
+    vec3 R = refract(-V, N, eta);
+
+    RefractRayWS ray;
+    ray.originWS = worldPos;
+    ray.dirWS    = normalize(R);
+    ray.maxDist  = getThickness(); // use thickness map/factor
+    return ray;
+}
+struct ScreenSample {
+    vec2 uv;
+    float depth;
+    bool valid;
+};
+
+ScreenSample projectToScreen(vec3 worldPos)
+{
+    ScreenSample s;
+    vec4 clip = ubo.proj * ubo.view * vec4(worldPos, 1.0);
+    if (clip.w <= 0.0) {
+        s.valid = false;
+        return s;
+    }
+
+    vec3 ndc = clip.xyz / clip.w;
+    s.uv = ndc.xy * 0.5 + 0.5;
+    s.valid = (s.uv.x > 0.0 && s.uv.x < 1.0 &&
+               s.uv.y > 0.0 && s.uv.y < 1.0);
+
+    s.depth = clip.z / clip.w; // same space as sceneDepth if you stored NDC
+    return s;
+}
+
+
 vec2 refractOffset(vec3 Nvs, vec3 Vvs)
 {
     float eta = 1.0 / uMat.ior;
@@ -280,44 +331,69 @@ vec2 refractOffset(vec3 Nvs, vec3 Vvs)
 
 
 
-vec2 refractUVDepthAwareScreen(vec2 baseUV, vec3 N, vec3 V)
+vec2 refractUVDepthAwareVS(vec3 worldPos, vec3 N, vec3 V)
 {
-    mat3 viewRot = mat3(ubo.view); 
+    // --- 1. Transform everything into view space ---
+    mat3 worldToView = mat3(ubo.view);
 
-    vec3 Nvs = normalize(viewRot * N);
-    vec3 Vvs = normalize(viewRot * V);
-    
-    vec2 dir = refractOffset(Nvs, Vvs);
-    float steps = 16.0;
+    vec3 Nvs = normalize(worldToView * N);
+    vec3 Vvs = normalize(worldToView * V);
 
-    float baseDepth = texture(sceneDepth, baseUV).r;
-    float lastDepth = baseDepth;
-    vec2  lastUV    = baseUV;
+    // Position in view space
+    vec3 Pvs = (ubo.view * vec4(worldPos, 1.0)).xyz;
 
-    for (float i = 1.0; i <= steps; i += 1.0)
+    // --- 2. Compute refracted ray in view space ---
+    float eta = 1.0 / uMat.ior;
+    vec3 Rvs = refract(-Vvs, Nvs, eta);
+    Rvs = normalize(Rvs);
+
+    // Thickness controls how far we march
+    float maxDist = getThickness();
+    const int steps = 24;
+    float tStep = maxDist / float(steps);
+
+    // --- 3. Project starting point to screen ---
+    vec4 clip0 = ubo.proj * vec4(Pvs, 1.0);
+    vec3 ndc0  = clip0.xyz / clip0.w;
+    vec2 uv0   = ndc0.xy * 0.5 + 0.5;
+
+    if (uv0.x < 0.0 || uv0.x > 1.0 || uv0.y < 0.0 || uv0.y > 1.0)
+        return clamp(fragSceneUV, vec2(0.001), vec2(0.999));
+
+    float lastDepthTex = texture(sceneDepth, uv0).r;
+    vec2 lastUV = uv0;
+
+    // --- 4. March along refracted ray in view space ---
+    for (int i = 1; i <= steps; ++i)
     {
-        vec2 uv = baseUV + dir * (i / steps);
+        float t = float(i) * tStep;
+        vec3 sampleVS = Pvs + Rvs * t;
+
+        // Project to clip space
+        vec4 clip = ubo.proj * vec4(sampleVS, 1.0);
+        vec3 ndc  = clip.xyz / clip.w;
+        vec2 uv   = ndc.xy * 0.5 + 0.5;
+
+        // Stop if off‑screen
         if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0)
             break;
 
-        float d = texture(sceneDepth, uv).r;
+        float depthTex = texture(sceneDepth, uv).r;
 
-        // we just went behind some opaque geometry
-        if (d < lastDepth - 1e-3)
+        // --- 5. Detect intersection with opaque geometry ---
+        if (depthTex < lastDepthTex - 1e-3)
         {
-            // simple lerp between last and current for stability
-            float a = 0.5;
-            return clamp(mix(lastUV, uv, a), vec2(0.001), vec2(0.999));
+            vec2 hitUV = mix(lastUV, uv, 0.5);
+            return clamp(hitUV, vec2(0.001), vec2(0.999));
         }
 
-        lastDepth = d;
-        lastUV    = uv;
+        lastUV = uv;
+        lastDepthTex = depthTex;
     }
 
-    // no hit → just use the last UV (background / env)
+    // No hit → return last valid UV
     return clamp(lastUV, vec2(0.001), vec2(0.999));
 }
-
 
 vec2 refractUVSimple(vec3 worldPos, vec3 N, vec3 V)
 {
@@ -336,27 +412,28 @@ vec2 refractUVSimple(vec3 worldPos, vec3 N, vec3 V)
 // ─────────────────────────────────────────────
 void main()
 {
-    // Base color (optional)
+    // -----------------------------
+    // Base color
+    // -----------------------------
     bool hasBaseColorTex = (uMat.baseColorTT.rot_center_tex.w >= 0.0);
 
     vec4 baseColor;
     if (hasBaseColorTex) {
         vec2 uvBase = getUV(getTexCoordIndex(uMat.baseColorTT));
         uvBase = applyTextureTransform(uvBase, uMat.baseColorTT);
-        vec4 baseSample = texture(baseColorTex, uvBase);
+        vec4 baseSample = texture(baseColorTex, uvBase); // sRGB
         baseColor = baseSample * pc.baseColorFactor;
     } else {
         baseColor = pc.baseColorFactor;
     }
 
     // Alpha mask
-    if (pc.alphaMask > 0.5) {
-        if (baseColor.a < pc.alphaMaskCutoff) {
-            discard;
-        }
-    }
+    if (pc.alphaMask > 0.5 && baseColor.a < pc.alphaMaskCutoff)
+        discard;
 
-    // Metallic-Roughness
+    // -----------------------------
+    // Metallic / Roughness
+    // -----------------------------
     bool hasMRTex = (uMat.mrTT.rot_center_tex.w >= 0.0);
 
     float metallic;
@@ -373,56 +450,64 @@ void main()
         roughness = clamp(pc.roughnessFactor, 0.04, 1.0);
     }
 
+    // -----------------------------
     // Occlusion
-    bool hasOccTex = (uMat.occlusionTT.rot_center_tex.w >= 0.0);
-
-    float occlusion;
-    if (hasOccTex) {
+    // -----------------------------
+    float occlusion = 1.0;
+    if (uMat.occlusionTT.rot_center_tex.w >= 0.0) {
         vec2 uvOcc = getUV(getTexCoordIndex(uMat.occlusionTT));
         uvOcc = applyTextureTransform(uvOcc, uMat.occlusionTT);
         occlusion = texture(occlusionTex, uvOcc).r;
-    } else {
-        occlusion = 1.0;
     }
 
+    // -----------------------------
     // Emissive
-    bool hasEmissiveTex = (uMat.emissiveTT.rot_center_tex.w >= 0.0);
-
-    vec3 emissive;
-    if (hasEmissiveTex) {
+    // -----------------------------
+    vec3 emissive = vec3(0.0);
+    if (uMat.emissiveTT.rot_center_tex.w >= 0.0) {
         vec2 uvEm = getUV(getTexCoordIndex(uMat.emissiveTT));
         uvEm = applyTextureTransform(uvEm, uMat.emissiveTT);
         emissive = texture(emissiveTex, uvEm).rgb;
-    } else {
-        emissive = vec3(0.0);
     }
 
-    // Normal + view (WORLD SPACE)
-    vec3 N = getNormalFromMap();                       // world
-    vec3 V = normalize(ubo.camPos.xyz - fragWorldPos); // world
+    // -----------------------------
+    // Normal + View (WORLD SPACE)
+    // -----------------------------
+    vec3 N = getNormalFromMap();
+    vec3 V = normalize(ubo.camPos.xyz - fragWorldPos);
 
-    // Base color to linear
+    // -----------------------------
+    // Base color → linear
+    // -----------------------------
     vec3 baseLinear = pow(baseColor.rgb, vec3(2.2));
     vec3 albedo     = baseLinear * fragColorVS;
 
     float F0_scalar = IorToF0(uMat.ior);
     vec3  F0        = vec3(F0_scalar);
-
-    // clamp F0 so glass isn't chrome
     F0 = clamp(F0, 0.02, 0.08);
     F0 = mix(F0, albedo, metallic);
 
-    // ─────────────────────────────────────────────
-    // Environment Reflection (WORLD SPACE)
-    // ─────────────────────────────────────────────
-    vec3 Rref = reflect(-V, N);
-    vec3 envReflect = sampleEnvironment(Rref);
-    float NdotV_ref = max(dot(N, V), 0.0);
-    vec3 Fspec = FresnelSchlick(NdotV_ref, F0);
-    vec3 reflection = envReflect * Fspec;
-    
+    float NdotV = max(dot(N, V), 0.0);
 
-    // Direct lighting (WORLD SPACE)
+    // -----------------------------
+    // IBL
+    // -----------------------------
+    vec3 diffIBL = texture(envIrradiance, N).rgb;
+
+    float maxMip = ubo.prefilteredCubeMipLevels;
+    vec3 Rref    = reflect(-V, N);
+    float mipRef = roughness * maxMip;
+    vec3 prefilteredRef = textureLod(envSpecular, Rref, mipRef).rgb;
+
+    vec2 brdf = texture(brdfLUT, vec2(NdotV, roughness)).rg;
+
+    vec3 specIBL = prefilteredRef * (F0 * brdf.x + brdf.y);
+
+    vec3 ibl = (1.0 - metallic) * diffIBL * albedo + specIBL;
+
+    // -----------------------------
+    // Direct lighting
+    // -----------------------------
     vec3 Lo = vec3(0.0);
     for (int i = 0; i < 4; ++i) {
         vec3 Lpos   = ubo.lightPositions[i].xyz;
@@ -459,70 +544,71 @@ void main()
         Lo += (kD * albedo / 3.14159265 + specular) * radiance * NdotL;
     }
 
-    vec3 ambient = albedo * 0.03 * occlusion;
-    vec3 lit     = ambient + Lo;
+    vec3 lit = ibl + Lo;
+    lit *= occlusion;
 
-    // Add environment reflection on top of direct lighting
-    lit += reflection;
-
+    // -----------------------------
+    // Refraction (VIEW-SPACE, DEPTH-AWARE)
+    // -----------------------------
     float transmission = getTransmission();
 
-    // ─────────────────────────────────────────────
-    // Refraction: screen-space (VIEW SPACE) + env fallback (WORLD SPACE)
-    // ─────────────────────────────────────────────
+    if (transmission > 0.0)
+    {
+        // Compute refracted UV using your new function
+        vec2 refractUV = refractUVDepthAwareVS(fragWorldPos, N, V);
 
-    // Convert N and V to VIEW SPACE for screen-space distortion
-    mat3 viewRot = mat3(ubo.view); // world→view rotation
-    vec3 Nvs = normalize(viewRot * N);
-    vec3 Vvs = normalize(viewRot * V);
+        // Sample scene color
+        vec3 sceneRefract = texture(sceneColor, refractUV).rgb;
+        sceneRefract = applyVolumeToTransmission(sceneRefract);
 
-    // Screen-space distortion uses view-space N/V
-    vec2 refractUV = fragSceneUV + refractOffset(Nvs, Vvs);
-    refractUV = clamp(refractUV, vec2(0.001), vec2(0.999));
-    vec3 sceneRefract = texture(sceneColor, refractUV).rgb;
+        // Compute env refraction direction
+        mat3 worldToView = mat3(ubo.view);
+        mat3 viewToWorld = mat3(inverse(ubo.view));
 
-    // WORLD-SPACE refraction for environment
-    float eta = 1.0 / uMat.ior;
-    vec3 Renv = refract(-V, N, eta);           // world
-    vec3 envRefract = sampleEnvironment(Renv); // world-space env lookup
+        vec3 Nvs = normalize(worldToView * N);
+        vec3 Vvs = normalize(worldToView * V);
+        float eta = 1.0 / uMat.ior;
+        vec3 Rvs = refract(-Vvs, Nvs, eta);
+        vec3 Rws = normalize(viewToWorld * Rvs);
 
-    sceneRefract = applyVolumeToTransmission(sceneRefract);
-    envRefract   = applyVolumeToTransmission(envRefract);
+        float mipRefr = roughness * maxMip;
+        vec3 envRefract = textureLod(envSpecular, Rws, mipRefr).rgb;
+        envRefract = applyVolumeToTransmission(envRefract);
 
-    float NdotV = max(dot(N, V), 0.0);
-    vec3 Fview  = FresnelSchlick(NdotV, F0);
-    Fview = mix(Fview, vec3(1.0), 0.2); // slightly stronger Fresnel
+        float NdotV_f = max(dot(N, V), 0.0);
+        vec3 Fview    = FresnelSchlick(NdotV_f, F0);
+        Fview = mix(Fview, vec3(1.0), 0.2);
 
-    // bias toward env so screen-space isn't tiny/swimmy
-    float sceneWeight = transmission * 0.4;
-    float envWeight   = transmission - sceneWeight;
-    vec3 refractedColor =
-        envRefract   * envWeight +
-        sceneRefract * sceneWeight;
+        float sceneWeight = transmission * 0.4;
+        float envWeight   = transmission - sceneWeight;
 
-    // cap how much refraction can replace lit/specular
-    float transWeight = transmission * (1.0 - Fview.r);
-    transWeight = min(transWeight, 0.6);
+        vec3 refractedColor =
+            envRefract   * envWeight +
+            sceneRefract * sceneWeight;
 
-    float maxReplace = 0.4; // never replace more than 40% of lit
-    float w = min(transWeight, maxReplace);
-    
-    vec3 colorNoEmissive = lit * (1.0 - w) + refractedColor * w;
+        float transWeight = transmission * (1.0 - Fview.r);
+        transWeight = min(transWeight, 0.6);
 
+        float maxReplace = 0.4;
+        float w = min(transWeight, maxReplace);
 
-    // Tone map + gamma
-    vec3 color = vec3(1.0) - exp(-colorNoEmissive * ubo.exposure);
-    color = pow(color, vec3(1.0 / ubo.gamma));
-
-    // Emissive after tone mapping
-    color += emissive;
-
-    // Alpha / WBOIT
-    float alpha = clamp((baseColor.a * (1.0 - transmission)), 0.4, 1.0);
-    if (alpha <= 0.0) {
-        discard;
+        lit = mix(lit, refractedColor, w);
     }
 
+    // -----------------------------
+    // Tone map + gamma
+    // -----------------------------
+    vec3 color = vec3(1.0) - exp(-lit * ubo.exposure);
+    color = pow(color, vec3(1.0 / ubo.gamma));
+
+    color += emissive;
+
+    // -----------------------------
+    // WBOIT alpha
+    // -----------------------------
+    float alpha = baseColor.a * (1.0 - transmission);
+    if (alpha <= 0.0) discard;
+
     outAccum  = vec4(color * alpha, alpha);
-    outReveal = 1.0 - alpha;
+    outReveal = alpha;
 }

@@ -27,6 +27,155 @@ VkResult allocateDescriptorSetsWithResize(State* state,	const VkDescriptorSetAll
 	return result;
 }
 
+// IBL descriptors (set = 0)
+void iblSetLayoutCreate(State* state)
+{
+	VkDescriptorSetLayoutBinding envBinding{
+		.binding = 0,
+		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+		.pImmutableSamplers = nullptr
+	};
+
+	VkDescriptorSetLayoutBinding specBinding{
+		.binding = 1,
+		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+		.pImmutableSamplers = nullptr
+	};
+
+	VkDescriptorSetLayoutBinding bindings[] = { envBinding, specBinding };
+
+	VkDescriptorSetLayoutCreateInfo info{
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+		.bindingCount = 2,
+		.pBindings = bindings
+	};
+
+	PANIC(
+		vkCreateDescriptorSetLayout(
+			state->context->device,
+			&info,
+			nullptr,
+			&state->renderer->iblSetLayout
+		),
+		"Failed to create IBL descriptor set layout"
+	);
+}
+void iblSetLayoutDestroy(State* state)
+{
+	vkDestroyDescriptorSetLayout(state->context->device, state->renderer->iblSetLayout, nullptr);
+}
+void iblDescriptorPoolCreate(State* state)
+{
+	VkDevice device = state->context->device;
+
+	uint32_t mipLevels = state->texture->specularMipLevels;
+	assert(mipLevels > 0);
+
+	// We need:
+	//  - 1 COMBINED_IMAGE_SAMPLER per mip (env cube)
+	//  - 1 STORAGE_IMAGE per mip (specular target)
+	VkDescriptorPoolSize poolSizes[] = {
+		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, mipLevels },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          mipLevels },
+	};
+
+	VkDescriptorPoolCreateInfo poolInfo{
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+		.flags = 0,
+		.maxSets = mipLevels,
+		.poolSizeCount = 2,
+		.pPoolSizes = poolSizes
+	};
+
+	PANIC(
+		vkCreateDescriptorPool(
+			device,
+			&poolInfo,
+			nullptr,
+			&state->renderer->iblDescriptorPool
+		),
+		"Failed to create IBL descriptor pool"
+	);
+}
+
+void iblDescriptorPoolDestroy(State* state)
+{
+	vkDestroyDescriptorPool(state->context->device, state->renderer->iblDescriptorPool, nullptr);
+}
+void iblSetCreate(State* state)
+{
+	VkDevice device = state->context->device;
+
+	uint32_t mipLevels = state->texture->specularMipLevels;
+	assert(mipLevels > 0);
+
+	// Allocate vector to hold all mip-level descriptor sets
+	state->renderer->iblSets.resize(mipLevels);
+
+	// All sets use the same layout
+	std::vector<VkDescriptorSetLayout> layouts(mipLevels, state->renderer->iblSetLayout);
+
+	VkDescriptorSetAllocateInfo allocInfo{
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+		.descriptorPool = state->renderer->iblDescriptorPool,
+		.descriptorSetCount = mipLevels,
+		.pSetLayouts = layouts.data()
+	};
+
+	PANIC(
+		vkAllocateDescriptorSets(
+			device,
+			&allocInfo,
+			state->renderer->iblSets.data()
+		),
+		"Failed to allocate IBL descriptor sets"
+	);
+
+	// Binding 0: env cubemap (same for all mips)
+	VkDescriptorImageInfo envInfo{
+		.sampler = state->texture->cubeSampler,
+		.imageView = state->texture->cubeImageView,
+		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+	};
+
+	// Write each mip's descriptor set
+	for (uint32_t mip = 0; mip < mipLevels; ++mip)
+	{
+		VkDescriptorSet set = state->renderer->iblSets[mip];
+
+		// Binding 1: storage image for this mip
+		VkDescriptorImageInfo specInfo{
+			.sampler = VK_NULL_HANDLE,
+			.imageView = state->renderer->computeMipViews[mip],
+			.imageLayout = VK_IMAGE_LAYOUT_GENERAL
+		};
+
+		VkWriteDescriptorSet writes[2]{};
+
+		// binding 0: env cube
+		writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		writes[0].dstSet = set;
+		writes[0].dstBinding = 0;
+		writes[0].descriptorCount = 1;
+		writes[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		writes[0].pImageInfo = &envInfo;
+
+		// binding 1: storage image (per mip)
+		writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		writes[1].dstSet = set;
+		writes[1].dstBinding = 1;
+		writes[1].descriptorCount = 1;
+		writes[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+		writes[1].pImageInfo = &specInfo;
+
+		vkUpdateDescriptorSets(device, 2, writes, 0, nullptr);
+	}
+}
+
 // set 0: global UBO
 void globalSetLayoutCreate(State* state) {
 
@@ -38,32 +187,55 @@ void globalSetLayoutCreate(State* state) {
 		.pImmutableSamplers = nullptr
 	};
 	VkDescriptorSetLayoutBinding cubemapBinding{
-	.binding = 1,
-	.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-	.descriptorCount = 1,
-	.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-	.pImmutableSamplers = nullptr
+		.binding = 1,
+		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+		.pImmutableSamplers = nullptr
 	};
 	VkDescriptorSetLayoutBinding colorBinding{
-	.binding = 2,
-	.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-	.descriptorCount = 1,
-	.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-	.pImmutableSamplers = nullptr
+		.binding = 2,
+		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+		.pImmutableSamplers = nullptr
 	};
 	VkDescriptorSetLayoutBinding depthBinding{
-	.binding = 3,
-	.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-	.descriptorCount = 1,
-	.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-	.pImmutableSamplers = nullptr
+		.binding = 3,
+		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+		.pImmutableSamplers = nullptr
 	};
-
-	std::array<VkDescriptorSetLayoutBinding, 4> bindings = {
+	VkDescriptorSetLayoutBinding irradianceBinding{
+		.binding = 4,
+		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+		.pImmutableSamplers = nullptr
+	};
+	VkDescriptorSetLayoutBinding specularBinding{
+		.binding = 5,
+		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+		.pImmutableSamplers = nullptr
+	}; 
+	VkDescriptorSetLayoutBinding lutBinding{
+		.binding = 6,
+		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+		.pImmutableSamplers = nullptr
+	};
+	std::array<VkDescriptorSetLayoutBinding, 7> bindings = {
 		uboBinding,
 		cubemapBinding,
 		colorBinding,
-		depthBinding
+		depthBinding,
+		irradianceBinding,
+		specularBinding,
+		lutBinding,
 	};
 
 	VkDescriptorSetLayoutCreateInfo info{
@@ -86,7 +258,7 @@ void globalDescriptorPoolCreate(State* state)
 
 	// envMap + sceneColor + sceneDepth
 	uint32_t globalImageDescriptors =
-		frames * 3 * state->renderer->descriptorPoolMultiplier;
+		frames * 6 * state->renderer->descriptorPoolMultiplier;
 
 	// present: scene + accum + reveal
 	uint32_t presentImageDescriptors = 3;
@@ -186,6 +358,7 @@ void globalSetsCreate(State* state)
 
 	for (uint32_t i = 0; i < frames; i++)
 	{
+
 		// ─────────────────────────────────────────────
 		// Binding 0: UBO
 		// ─────────────────────────────────────────────
@@ -223,7 +396,7 @@ void globalSetsCreate(State* state)
 		};
 
 		// ─────────────────────────────────────────────
-		// Binding 2: sceneColor sampler (opaque pass)
+		// Binding 2: sceneColor sampler
 		// ─────────────────────────────────────────────
 		VkDescriptorImageInfo sceneInfo{
 			.sampler = state->texture->sceneColorSampler,
@@ -241,11 +414,11 @@ void globalSetsCreate(State* state)
 		};
 
 		// ─────────────────────────────────────────────
-		// Binding 3: sceneDepth sampler (opaque depth)
+		// Binding 3: sceneDepth sampler
 		// ─────────────────────────────────────────────
 		VkDescriptorImageInfo depthInfo{
-			.sampler = state->texture->sceneDepthSampler,      // your resolved depth sampler
-			.imageView = state->texture->sceneDepthImageView,  // your resolved depth view
+			.sampler = state->texture->sceneDepthSampler,
+			.imageView = state->texture->sceneDepthImageView,
 			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
 		};
 
@@ -259,13 +432,70 @@ void globalSetsCreate(State* state)
 		};
 
 		// ─────────────────────────────────────────────
+		// Binding 4: envIrradiance (samplerCube)
+		// ─────────────────────────────────────────────
+		VkDescriptorImageInfo irradianceInfo{
+			.sampler = state->texture->irradianceSampler,
+			.imageView = state->texture->irradianceImageView,
+			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+		};
+
+		VkWriteDescriptorSet writeIrradiance{
+			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			.dstSet = state->renderer->globalSets[i],
+			.dstBinding = 4,
+			.descriptorCount = 1,
+			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			.pImageInfo = &irradianceInfo
+		};
+
+		// ─────────────────────────────────────────────
+		// Binding 5: envSpecular (samplerCube with mips)
+		// ─────────────────────────────────────────────
+		VkDescriptorImageInfo specularInfo{
+			.sampler = state->texture->computeSampler,
+			.imageView = state->texture->computeImageView,
+			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+		};
+
+		VkWriteDescriptorSet writeSpecular{
+			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			.dstSet = state->renderer->globalSets[i],
+			.dstBinding = 5,
+			.descriptorCount = 1,
+			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			.pImageInfo = &specularInfo
+		};
+
+		// ─────────────────────────────────────────────
+		// Binding 6: brdfLUT (sampler2D)
+		// ─────────────────────────────────────────────
+		VkDescriptorImageInfo brdfInfo{
+			.sampler = state->texture->lutSampler,
+			.imageView = state->texture->lutImageView,
+			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+		};
+
+		VkWriteDescriptorSet writeBRDF{
+			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			.dstSet = state->renderer->globalSets[i],
+			.dstBinding = 6,
+			.descriptorCount = 1,
+			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			.pImageInfo = &brdfInfo
+		};
+
+		// ─────────────────────────────────────────────
 		// Submit all writes
 		// ─────────────────────────────────────────────
-		std::array<VkWriteDescriptorSet, 4> writes = {
+		std::array<VkWriteDescriptorSet, 7> writes = {
 			writeUBO,
 			writeCube,
 			writeScene,
-			writeDepth
+			writeDepth,
+			writeIrradiance,
+			writeSpecular,
+			writeBRDF
 		};
 
 		vkUpdateDescriptorSets(
@@ -793,12 +1023,13 @@ void uniformBuffersUpdate(State* state) {
 	ubo.lightColors[3] = glm::vec4(0.0f, 300.0f, 0.0f, 0.0f);
 
 	// Camera position
-	ubo.camPos = glm::vec4(state->scene->camera->getPosition(), 1.0f);
+	glm::mat4 invView = glm::inverse(view);
+	ubo.camPos = invView[3];   // world-space camera position
 
 	// PBR params
 	ubo.exposure = 1.0f;
 	ubo.gamma = 1.0f;
-	ubo.prefilteredCubeMipLevels = 1.0f;
+	ubo.prefilteredCubeMipLevels = float(state->texture->computeMipLevels - 1);
 	ubo.scaleIBLAmbient = 1.0f;
 
 	// Write into the mapped global UBO buffer for this frame
