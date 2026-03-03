@@ -1,6 +1,7 @@
 #include "render/pipelines.h"
 #include "render/renderer.h"
 #include "resources/images.h"
+#include "render/command_buffers.h"
 #include "scene/mesh.h"
 #include "scene/skybox.h"
 #include "scene/texture.h"
@@ -22,73 +23,108 @@ static std::vector<char> shaderRead(const char* filePath) {
 //Compute Pipelines
 void iblPipelineCreate(State* state)
 {
-	// 1) Load SPIR-V
-	auto computeShaderCode = shaderRead("./res/shaders/ibl_compute.spv");
+	VkDevice device = state->context->device;
 
+	// load SPIR-V for ibl_prefilter.comp
+	std::vector<char> code = shaderRead("./res/shaders/ibl_compute.spv");
+
+	VkShaderModuleCreateInfo moduleInfo{};
+	moduleInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+	moduleInfo.codeSize = code.size();
+	moduleInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
+
+	VkShaderModule module;
+	PANIC(vkCreateShaderModule(device, &moduleInfo, nullptr, &module),
+		"Failed to create IBL compute shader module");
+
+	VkPipelineShaderStageCreateInfo stage{};
+	stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+	stage.module = module;
+	stage.pName = "main";
+
+	// push constants: face, mip, roughness, mipResolution
+	VkPushConstantRange range{};
+	range.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+	range.offset = 0;
+	range.size = sizeof(int) * 3 + sizeof(float); // or a struct
+
+	VkPipelineLayoutCreateInfo layoutInfo{};
+	layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	layoutInfo.setLayoutCount = 1;
+	layoutInfo.pSetLayouts = &state->renderer->iblSetLayout;
+	layoutInfo.pushConstantRangeCount = 1;
+	layoutInfo.pPushConstantRanges = &range;
+
+	PANIC(vkCreatePipelineLayout(device, &layoutInfo, nullptr, &state->renderer->iblPipelineLayout),
+		"Failed to create IBL pipeline layout");
+
+	VkComputePipelineCreateInfo pipeInfo{};
+	pipeInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+	pipeInfo.stage = stage;
+	pipeInfo.layout = state->renderer->iblPipelineLayout;
+
+	PANIC(vkCreateComputePipelines(device,
+		VK_NULL_HANDLE,
+		1,
+		&pipeInfo,
+		nullptr,
+		&state->renderer->iblPipeline),
+		"Failed to create IBL compute pipeline");
+
+	vkDestroyShaderModule(device, module, nullptr);
+}
+void brdfLutPipelineCreate(State* state)
+{
+    auto compShaderCode = shaderRead("./res/shaders/lut_compute.spv");
 	VkShaderModuleCreateInfo shaderModuleInfo{
 		.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-		.codeSize = computeShaderCode.size(),
-		.pCode = reinterpret_cast<const uint32_t*>(computeShaderCode.data()),
+		.codeSize = compShaderCode.size(),
+		.pCode = reinterpret_cast<const uint32_t*>(compShaderCode.data()),
 	};
-
 	VkShaderModule computeShaderModule;
 	PANIC(
 		vkCreateShaderModule(state->context->device, &shaderModuleInfo, nullptr, &computeShaderModule),
 		"Failed to create IBL compute shader module"
 	);
 
-	// 2) Push constants
-	VkPushConstantRange pushRange{
-		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-		.offset = 0,
-		.size = sizeof(int) * 3 + sizeof(float) // face, mip, roughness, mipResolution
-	};
+    VkPipelineLayoutCreateInfo layoutInfo{};
+    layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    layoutInfo.setLayoutCount = 1;
+    layoutInfo.pSetLayouts = &state->renderer->lutSetLayout;
 
-	// 3) Pipeline layout
-	VkPipelineLayoutCreateInfo pipelineLayoutInfo{
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-		.setLayoutCount = 1,
-		.pSetLayouts = &state->renderer->iblSetLayout,
-		.pushConstantRangeCount = 1,
-		.pPushConstantRanges = &pushRange
-	};
+    vkCreatePipelineLayout(
+        state->context->device,
+        &layoutInfo,
+        nullptr,
+        &state->renderer->lutPipelineLayout
+    );
 
-	PANIC(
-		vkCreatePipelineLayout(
-			state->context->device,
-			&pipelineLayoutInfo,
-			nullptr,
-			&state->renderer->iblPipelineLayout
-		),
-		"Failed to create IBL compute pipeline layout"
-	);
+    VkComputePipelineCreateInfo info{};
+    info.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+    info.stage = {
+        VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+        nullptr,
+        0,
+        VK_SHADER_STAGE_COMPUTE_BIT,
+        computeShaderModule,
+        "main",
+        nullptr
+    };
+    info.layout = state->renderer->lutPipelineLayout;
 
-	// 4) Compute pipeline
-	VkComputePipelineCreateInfo pipelineInfo{
-		.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-		.stage = {
-			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-			.stage = VK_SHADER_STAGE_COMPUTE_BIT,
-			.module = computeShaderModule,
-			.pName = "main"
-		},
-		.layout = state->renderer->iblPipelineLayout,
-	};
+    vkCreateComputePipelines(
+        state->context->device,
+        VK_NULL_HANDLE,
+        1,
+        &info,
+        nullptr,
+        &state->renderer->lutPipeline
+    );
 
-	PANIC(
-		vkCreateComputePipelines(
-			state->context->device,
-			VK_NULL_HANDLE,
-			1,
-			&pipelineInfo,
-			nullptr,
-			&state->renderer->iblPipeline
-		),
-		"Failed to create IBL compute pipeline"
-	);
-
-	vkDestroyShaderModule(state->context->device, computeShaderModule, nullptr);
+    vkDestroyShaderModule(state->context->device, computeShaderModule, nullptr);
 }
+
 
 //Graphics Pipelines
 void skyboxPipelineCreate(State* state) {
@@ -227,10 +263,10 @@ void skyboxPipelineCreate(State* state) {
 		.pAttachments = &colorBlendAttachment,
 	};
 
-	VkDescriptorSetLayout setLayouts[] = { state->renderer->globalSetLayout };
+	VkDescriptorSetLayout setLayouts[] = { state->renderer->globalSetLayout, state->renderer->materialSetLayout };
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-		.setLayoutCount = 1,
+		.setLayoutCount = 2,
 		.pSetLayouts = setLayouts,
 	};
 	PANIC(vkCreatePipelineLayout(state->context->device, &pipelineLayoutInfo, nullptr, &state->renderer->skyboxPipelineLayout), "Failed To Create Pipeline Layout");
@@ -885,7 +921,8 @@ void iblPrefilterDispatch(State* state, uint32_t baseSize)
 	};
 
 	VkCommandBuffer cmd;
-	vkAllocateCommandBuffers(device, &allocInfo, &cmd);
+	PANIC(vkAllocateCommandBuffers(device, &allocInfo, &cmd),
+		"Failed to allocate IBL compute command buffer");
 
 	VkCommandBufferBeginInfo beginInfo{
 		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
@@ -893,16 +930,29 @@ void iblPrefilterDispatch(State* state, uint32_t baseSize)
 	};
 	vkBeginCommandBuffer(cmd, &beginInfo);
 
-	// computeImage: UNDEFINED → GENERAL (for STORAGE_IMAGE writes)
-	transitionImageLayout(
-		state,
-		image,
-		format,
-		VK_IMAGE_LAYOUT_UNDEFINED,
-		VK_IMAGE_LAYOUT_GENERAL,
-		mipLevels,
-		6
-	);
+	// UNDEFINED -> GENERAL for all mips/faces
+	VkImageMemoryBarrier pre{};
+	pre.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+	pre.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	pre.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+	pre.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	pre.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	pre.image = image;
+	pre.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	pre.subresourceRange.baseMipLevel = 0;
+	pre.subresourceRange.levelCount = mipLevels;
+	pre.subresourceRange.baseArrayLayer = 0;
+	pre.subresourceRange.layerCount = 6;
+	pre.srcAccessMask = 0;
+	pre.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+
+	vkCmdPipelineBarrier(cmd,
+		VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+		VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+		0,
+		0, nullptr,
+		0, nullptr,
+		1, &pre);
 
 	// Bind compute pipeline
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, state->renderer->iblPipeline);
@@ -912,23 +962,7 @@ void iblPrefilterDispatch(State* state, uint32_t baseSize)
 		uint32_t mipSize = baseSize >> mip;
 		float roughness = (mipLevels > 1) ? float(mip) / float(mipLevels - 1) : 0.0f;
 
-		// Descriptor for this mip's storage image
-		VkDescriptorImageInfo specInfo{};
-		specInfo.sampler = VK_NULL_HANDLE;
-		specInfo.imageView = state->renderer->computeMipViews[mip];
-		specInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL; // ← stays GENERAL
-
-		VkWriteDescriptorSet write{};
-		write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		write.dstSet = state->renderer->iblSets[mip];   // per-mip set
-		write.dstBinding = 1;                           // storage image
-		write.descriptorCount = 1;
-		write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-		write.pImageInfo = &specInfo;
-
-		vkUpdateDescriptorSets(device, 1, &write, 0, nullptr);
-
-		// Bind this mip's set
+		// Bind per-mip descriptor set (envMap + storage image view)
 		vkCmdBindDescriptorSets(
 			cmd,
 			VK_PIPELINE_BIND_POINT_COMPUTE,
@@ -968,8 +1002,29 @@ void iblPrefilterDispatch(State* state, uint32_t baseSize)
 		}
 	}
 
-	// IMPORTANT: leave image in GENERAL
-	// No GENERAL → SHADER_READ_ONLY_OPTIMAL transition here
+	// GENERAL -> SHADER_READ_ONLY_OPTIMAL for all mips/faces
+	VkImageMemoryBarrier post{};
+	post.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+	post.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+	post.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	post.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	post.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	post.image = image;
+	post.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	post.subresourceRange.baseMipLevel = 0;
+	post.subresourceRange.levelCount = mipLevels;
+	post.subresourceRange.baseArrayLayer = 0;
+	post.subresourceRange.layerCount = 6;
+	post.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+	post.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+	vkCmdPipelineBarrier(cmd,
+		VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+		0,
+		0, nullptr,
+		0, nullptr,
+		1, &post);
 
 	vkEndCommandBuffer(cmd);
 
@@ -983,4 +1038,69 @@ void iblPrefilterDispatch(State* state, uint32_t baseSize)
 	vkQueueWaitIdle(state->context->queue);
 
 	vkFreeCommandBuffers(device, pool, 1, &cmd);
+}
+
+
+void brdfLutGenerate(State* state)
+{
+	VkCommandBuffer cmd = beginSingleTimeCommands(state, state->renderer->commandPool);
+
+	// UNDEFINED -> GENERAL
+	VkImageMemoryBarrier barrier{};
+	barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+	barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+	barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	barrier.image = state->texture->lutImage;
+	barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	barrier.subresourceRange.baseMipLevel = 0;
+	barrier.subresourceRange.levelCount = 1;
+	barrier.subresourceRange.baseArrayLayer = 0;
+	barrier.subresourceRange.layerCount = 1;
+	barrier.srcAccessMask = 0;
+	barrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+
+	vkCmdPipelineBarrier(
+		cmd,
+		VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+		VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+		0,
+		0, nullptr,
+		0, nullptr,
+		1, &barrier
+	);
+
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, state->renderer->lutPipeline);
+	vkCmdBindDescriptorSets(
+		cmd,
+		VK_PIPELINE_BIND_POINT_COMPUTE,
+		state->renderer->lutPipelineLayout,
+		0, 1,
+		&state->renderer->lutSet,
+		0, nullptr
+	);
+
+	const uint32_t LUT_SIZE = 512;
+	uint32_t gx = (LUT_SIZE + 15) / 16;
+	uint32_t gy = (LUT_SIZE + 15) / 16;
+	vkCmdDispatch(cmd, gx, gy, 1);
+
+	// GENERAL -> SHADER_READ_ONLY_OPTIMAL
+	barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+	barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+	barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+	vkCmdPipelineBarrier(
+		cmd,
+		VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+		0,
+		0, nullptr,
+		0, nullptr,
+		1, &barrier
+	);
+
+	endSingleTimeCommands(state, cmd);
 }

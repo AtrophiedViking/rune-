@@ -45,6 +45,8 @@ void createTextureFromMemory(
 	Texture& outTex);
 void destroyTextures(State* state);
 
+void brdfLutImageCreate(State* state);
+
 void textureImageCreate(
 	State* state,
 	const std::string& texturePath,

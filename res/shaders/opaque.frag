@@ -325,7 +325,7 @@ void main()
         roughness = clamp(mrSample.g * pc.roughnessFactor, 0.04, 1.0);
     } else {
         metallic  = clamp(pc.metallicFactor, 0.0, 1.0);
-        roughness = clamp(pc.roughnessFactor, 0.04, 1.0);
+        roughness = clamp(pc.roughnessFactor, 0.0, 1.0);
     }
 
     // Occlusion (optional)
@@ -353,10 +353,10 @@ void main()
     }
 
     // Normal + view + reflection (world space)
-    vec3 N = getNormalFromMap();
+    vec3 N = normalize(fragNormal);
 
     // Derive camera position from view matrix (world space)
-    vec3 V = computeViewDirWorld(fragWorldPos);
+    vec3 V = normalize(ubo.camPos.xyz - fragWorldPos);
     vec3 R = reflect(-V, N);
     
                            // world space
@@ -458,5 +458,6 @@ void main()
     color += emissive;
 
     float alpha = baseColor.a;
+
     outColor = vec4(color, alpha);
 }

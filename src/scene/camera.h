@@ -25,7 +25,7 @@ struct Camera {
 
     float viewDistance = 100.0f;
     float nearClip = 0.1f;
-    float movementSpeed = 1.5f;
+    float movementSpeed = 0.5f;
     float mouseSensitivity = 0.2f;
 
     bool lookMode = true;

@@ -6,6 +6,7 @@
 struct State;
 //Compute Pipelines
 void iblPipelineCreate(State* state);
+void brdfLutPipelineCreate(State* state);
 //Graphics Pipelines
 void skyboxPipelineCreate(State* state);
 void skyboxPipelineDestroy(State * state);
@@ -22,3 +23,4 @@ void presentPipelineDestroy(State* state);
 //Dispatch
 void createComputeMipViews(State* state);
 void iblPrefilterDispatch(State* state, uint32_t width);
+void brdfLutGenerate(State* state);

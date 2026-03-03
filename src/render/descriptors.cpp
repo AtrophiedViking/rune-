@@ -30,39 +30,31 @@ VkResult allocateDescriptorSetsWithResize(State* state,	const VkDescriptorSetAll
 // IBL descriptors (set = 0)
 void iblSetLayoutCreate(State* state)
 {
-	VkDescriptorSetLayoutBinding envBinding{
-		.binding = 0,
-		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-		.descriptorCount = 1,
-		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-		.pImmutableSamplers = nullptr
+	VkDevice device = state->context->device;
+
+	VkDescriptorSetLayoutBinding envBinding{};
+	envBinding.binding = 0;
+	envBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	envBinding.descriptorCount = 1;
+	envBinding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
+	VkDescriptorSetLayoutBinding specBinding{};
+	specBinding.binding = 1;
+	specBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+	specBinding.descriptorCount = 1;
+	specBinding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
+	std::array<VkDescriptorSetLayoutBinding, 2> bindings = {
+		envBinding, specBinding
 	};
 
-	VkDescriptorSetLayoutBinding specBinding{
-		.binding = 1,
-		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-		.descriptorCount = 1,
-		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-		.pImmutableSamplers = nullptr
-	};
+	VkDescriptorSetLayoutCreateInfo info{};
+	info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	info.bindingCount = static_cast<uint32_t>(bindings.size());
+	info.pBindings = bindings.data();
 
-	VkDescriptorSetLayoutBinding bindings[] = { envBinding, specBinding };
-
-	VkDescriptorSetLayoutCreateInfo info{
-		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-		.bindingCount = 2,
-		.pBindings = bindings
-	};
-
-	PANIC(
-		vkCreateDescriptorSetLayout(
-			state->context->device,
-			&info,
-			nullptr,
-			&state->renderer->iblSetLayout
-		),
-		"Failed to create IBL descriptor set layout"
-	);
+	PANIC(vkCreateDescriptorSetLayout(device, &info, nullptr, &state->renderer->iblSetLayout),
+		"Failed to create IBL compute set layout");
 }
 void iblSetLayoutDestroy(State* state)
 {
@@ -71,37 +63,23 @@ void iblSetLayoutDestroy(State* state)
 void iblDescriptorPoolCreate(State* state)
 {
 	VkDevice device = state->context->device;
-
 	uint32_t mipLevels = state->texture->specularMipLevels;
-	assert(mipLevels > 0);
 
-	// We need:
-	//  - 1 COMBINED_IMAGE_SAMPLER per mip (env cube)
-	//  - 1 STORAGE_IMAGE per mip (specular target)
-	VkDescriptorPoolSize poolSizes[] = {
-		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, mipLevels },
-		{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          mipLevels },
-	};
+	VkDescriptorPoolSize poolSizes[2]{};
+	poolSizes[0].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	poolSizes[0].descriptorCount = mipLevels;
+	poolSizes[1].type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+	poolSizes[1].descriptorCount = mipLevels;
 
-	VkDescriptorPoolCreateInfo poolInfo{
-		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-		.flags = 0,
-		.maxSets = mipLevels,
-		.poolSizeCount = 2,
-		.pPoolSizes = poolSizes
-	};
+	VkDescriptorPoolCreateInfo poolInfo{};
+	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+	poolInfo.maxSets = mipLevels;
+	poolInfo.poolSizeCount = 2;
+	poolInfo.pPoolSizes = poolSizes;
 
-	PANIC(
-		vkCreateDescriptorPool(
-			device,
-			&poolInfo,
-			nullptr,
-			&state->renderer->iblDescriptorPool
-		),
-		"Failed to create IBL descriptor pool"
-	);
+	PANIC(vkCreateDescriptorPool(device, &poolInfo, nullptr, &state->renderer->iblDescriptorPool),
+		"Failed to create IBL descriptor pool");
 }
-
 void iblDescriptorPoolDestroy(State* state)
 {
 	vkDestroyDescriptorPool(state->context->device, state->renderer->iblDescriptorPool, nullptr);
@@ -109,72 +87,131 @@ void iblDescriptorPoolDestroy(State* state)
 void iblSetCreate(State* state)
 {
 	VkDevice device = state->context->device;
-
 	uint32_t mipLevels = state->texture->specularMipLevels;
-	assert(mipLevels > 0);
 
-	// Allocate vector to hold all mip-level descriptor sets
 	state->renderer->iblSets.resize(mipLevels);
 
-	// All sets use the same layout
 	std::vector<VkDescriptorSetLayout> layouts(mipLevels, state->renderer->iblSetLayout);
 
-	VkDescriptorSetAllocateInfo allocInfo{
-		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-		.descriptorPool = state->renderer->iblDescriptorPool,
-		.descriptorSetCount = mipLevels,
-		.pSetLayouts = layouts.data()
-	};
+	VkDescriptorSetAllocateInfo alloc{};
+	alloc.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+	alloc.descriptorPool = state->renderer->iblDescriptorPool;
+	alloc.descriptorSetCount = mipLevels;
+	alloc.pSetLayouts = layouts.data();
 
-	PANIC(
-		vkAllocateDescriptorSets(
-			device,
-			&allocInfo,
-			state->renderer->iblSets.data()
-		),
-		"Failed to allocate IBL descriptor sets"
-	);
+	PANIC(vkAllocateDescriptorSets(device, &alloc, state->renderer->iblSets.data()),
+		"Failed to allocate IBL descriptor sets");
 
-	// Binding 0: env cubemap (same for all mips)
-	VkDescriptorImageInfo envInfo{
-		.sampler = state->texture->cubeSampler,
-		.imageView = state->texture->cubeImageView,
-		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-	};
-
-	// Write each mip's descriptor set
 	for (uint32_t mip = 0; mip < mipLevels; ++mip)
 	{
-		VkDescriptorSet set = state->renderer->iblSets[mip];
+		// binding 0: envMap samplerCube
+		VkDescriptorImageInfo envInfo{};
+		envInfo.sampler = state->texture->cubeSampler;
+		envInfo.imageView = state->texture->cubeImageView;
+		envInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-		// Binding 1: storage image for this mip
-		VkDescriptorImageInfo specInfo{
-			.sampler = VK_NULL_HANDLE,
-			.imageView = state->renderer->computeMipViews[mip],
-			.imageLayout = VK_IMAGE_LAYOUT_GENERAL
-		};
+		VkWriteDescriptorSet writeEnv{};
+		writeEnv.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		writeEnv.dstSet = state->renderer->iblSets[mip];
+		writeEnv.dstBinding = 0;
+		writeEnv.descriptorCount = 1;
+		writeEnv.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		writeEnv.pImageInfo = &envInfo;
 
-		VkWriteDescriptorSet writes[2]{};
+		// binding 1: storage image (per-mip 2D array view)
+		VkDescriptorImageInfo specInfo{};
+		specInfo.sampler = VK_NULL_HANDLE;
+		specInfo.imageView = state->renderer->computeMipViews[mip];
+		specInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
 
-		// binding 0: env cube
-		writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		writes[0].dstSet = set;
-		writes[0].dstBinding = 0;
-		writes[0].descriptorCount = 1;
-		writes[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		writes[0].pImageInfo = &envInfo;
+		VkWriteDescriptorSet writeSpec{};
+		writeSpec.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		writeSpec.dstSet = state->renderer->iblSets[mip];
+		writeSpec.dstBinding = 1;
+		writeSpec.descriptorCount = 1;
+		writeSpec.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+		writeSpec.pImageInfo = &specInfo;
 
-		// binding 1: storage image (per mip)
-		writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		writes[1].dstSet = set;
-		writes[1].dstBinding = 1;
-		writes[1].descriptorCount = 1;
-		writes[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-		writes[1].pImageInfo = &specInfo;
-
-		vkUpdateDescriptorSets(device, 2, writes, 0, nullptr);
+		std::array<VkWriteDescriptorSet, 2> writes = { writeEnv, writeSpec };
+		vkUpdateDescriptorSets(device,
+			static_cast<uint32_t>(writes.size()),
+			writes.data(),
+			0, nullptr);
 	}
 }
+
+// brdfLutSetLayoutCreate.cpp
+void brdfLutSetLayoutCreate(State* state)
+{
+	VkDescriptorSetLayoutBinding lutBinding{};
+	lutBinding.binding = 0;
+	lutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+	lutBinding.descriptorCount = 1;
+	lutBinding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
+	VkDescriptorSetLayoutCreateInfo info{};
+	info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	info.bindingCount = 1;
+	info.pBindings = &lutBinding;
+
+	vkCreateDescriptorSetLayout(
+		state->context->device,
+		&info,
+		nullptr,
+		&state->renderer->lutSetLayout
+	);
+}
+void brdfLutDescriptorCreate(State* state)
+{
+	VkDescriptorPoolSize poolSize{};
+	poolSize.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+	poolSize.descriptorCount = 1;
+
+	VkDescriptorPoolCreateInfo poolInfo{};
+	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+	poolInfo.maxSets = 1;
+	poolInfo.poolSizeCount = 1;
+	poolInfo.pPoolSizes = &poolSize;
+
+	vkCreateDescriptorPool(
+		state->context->device,
+		&poolInfo,
+		nullptr,
+		&state->renderer->lutDescriptorPool
+	);
+
+	VkDescriptorSetAllocateInfo allocInfo{};
+	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+	allocInfo.descriptorPool = state->renderer->lutDescriptorPool;
+	allocInfo.descriptorSetCount = 1;
+	allocInfo.pSetLayouts = &state->renderer->lutSetLayout;
+
+	vkAllocateDescriptorSets(
+		state->context->device,
+		&allocInfo,
+		&state->renderer->lutSet
+	);
+
+	VkDescriptorImageInfo imageInfo{};
+	imageInfo.sampler = VK_NULL_HANDLE;
+	imageInfo.imageView = state->texture->lutImageView;
+	imageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+	VkWriteDescriptorSet write{};
+	write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	write.dstSet = state->renderer->lutSet;
+	write.dstBinding = 0;
+	write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+	write.descriptorCount = 1;
+	write.pImageInfo = &imageInfo;
+
+	vkUpdateDescriptorSets(
+		state->context->device,
+		1, &write,
+		0, nullptr
+	);
+}
+
 
 // set 0: global UBO
 void globalSetLayoutCreate(State* state) {
@@ -466,6 +503,10 @@ void globalSetsCreate(State* state)
 			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 			.pImageInfo = &specularInfo
 		};
+		printf("globalSets[%u] specular view = %p sampler = %p\n",
+			i,
+			(void*)specularInfo.imageView,
+			(void*)specularInfo.sampler);
 
 		// ─────────────────────────────────────────────
 		// Binding 6: brdfLUT (sampler2D)
@@ -1001,7 +1042,7 @@ void uniformBuffersUpdate(State* state) {
 	float aspect = static_cast<float>(state->window.swapchain.imageExtent.width) /
 		static_cast<float>(state->window.swapchain.imageExtent.height);
 
-	glm::mat4 proj = state->scene->camera->getProjectionMatrix(aspect, 0.1f, 2000.0f);
+	glm::mat4 proj = state->scene->camera->getProjectionMatrix(aspect, 0.001f, 2000.0f);
 
 	// Global UBO (model is identity; node transforms come from push constants)
 	UniformBufferObject ubo{};
@@ -1029,7 +1070,12 @@ void uniformBuffersUpdate(State* state) {
 	// PBR params
 	ubo.exposure = 1.0f;
 	ubo.gamma = 1.0f;
-	ubo.prefilteredCubeMipLevels = float(state->texture->computeMipLevels - 1);
+	ubo.prefilteredCubeMipLevels = float(state->texture->specularMipLevels - 1);
+	printf("envMipLevels=%u specularMipLevels=%u prefilteredCubeMipLevels=%f\n",
+		state->texture->envMipLevels,
+		state->texture->specularMipLevels,
+		ubo.prefilteredCubeMipLevels);
+
 	ubo.scaleIBLAmbient = 1.0f;
 
 	// Write into the mapped global UBO buffer for this frame

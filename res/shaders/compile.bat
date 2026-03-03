@@ -6,4 +6,5 @@ C:\VulkanSDK\1.4.335.0\Bin\glslc.exe .\res\shaders\present.vert -o .\res\shaders
 C:\VulkanSDK\1.4.335.0\Bin\glslc.exe .\res\shaders\skybox.vert -o .\res\shaders\skybox_vert.spv
 C:\VulkanSDK\1.4.335.0\Bin\glslc.exe .\res\shaders\skybox.frag -o .\res\shaders\skybox_frag.spv
 C:\VulkanSDK\1.4.335.0\Bin\glslc.exe .\res\shaders\ibl.comp -o .\res\shaders\ibl_compute.spv
+C:\VulkanSDK\1.4.335.0\Bin\glslc.exe .\res\shaders\lut.comp -o .\res\shaders\lut_compute.spv
 pause

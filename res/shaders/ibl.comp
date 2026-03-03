@@ -6,7 +6,7 @@ layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 layout(set = 0, binding = 0) uniform samplerCube uEnvMap;
 
 // binding 1: prefiltered specular (storage cube)
-layout(set = 0, binding = 1, rgba16f) uniform writeonly imageCube uSpecularEnv;
+layout(set = 0, binding = 1, rgba16f) uniform writeonly image2DArray uSpecularEnv;
 
 // push constants
 layout(push_constant) uniform Push {
@@ -14,7 +14,7 @@ layout(push_constant) uniform Push {
     int   mip;
     float roughness;
     int   mipResolution;
-} pc;
+} pc; 
 
 // ─────────────────────────────────────────────
 // Hammersley + GGX helpers
@@ -60,15 +60,16 @@ vec3 ImportanceSampleGGX(vec2 Xi, vec3 N, float roughness)
 // map face + uv → direction
 vec3 CubemapDirection(int face, vec2 uv)
 {
-    uv = uv * 2.0 - 1.0; // [0,1] → [-1,1]
+    uv = uv * 2.0 - 1.0;
 
-    if (face == 0) return normalize(vec3( 1.0,  uv.y, -uv.x)); // +X
-    if (face == 1) return normalize(vec3(-1.0,  uv.y,  uv.x)); // -X
-    if (face == 2) return normalize(vec3( uv.x,  1.0, -uv.y)); // +Y
-    if (face == 3) return normalize(vec3( uv.x, -1.0,  uv.y)); // -Y
-    if (face == 4) return normalize(vec3( uv.x,  uv.y,  1.0)); // +Z
-    return            normalize(vec3(-uv.x,  uv.y, -1.0));     // -Z
+    if (face == 0) return normalize(vec3( 1.0, -uv.y, -uv.x)); // +X
+    if (face == 1) return normalize(vec3(-1.0, -uv.y,  uv.x)); // -X
+    if (face == 2) return normalize(vec3( uv.x,  1.0,  uv.y)); // +Y
+    if (face == 3) return normalize(vec3( uv.x, -1.0, -uv.y)); // -Y
+    if (face == 4) return normalize(vec3( uv.x, -uv.y,  1.0)); // +Z
+    return            normalize(vec3(-uv.x, -uv.y, -1.0));     // -Z
 }
+
 
 void main()
 {

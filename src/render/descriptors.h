@@ -24,6 +24,9 @@ void iblDescriptorPoolCreate(State* state);
 void iblDescriptorPoolDestroy(State* state);
 void iblSetCreate(State* state);
 
+void brdfLutSetLayoutCreate(State* state);
+void brdfLutDescriptorCreate(State* state);
+
 // set 0: global UBO
 void globalSetLayoutCreate(State* state);
 void globalSetLayoutDestroy(State* state);

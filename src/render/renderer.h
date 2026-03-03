@@ -35,6 +35,10 @@ struct Renderer {
 	VkDescriptorSetLayout iblSetLayout;
 	std::vector<VkDescriptorSet> iblSets;
 	
+	VkDescriptorPool lutDescriptorPool;
+	VkDescriptorSetLayout lutSetLayout;
+	VkDescriptorSet lutSet;
+	
 	//Global descriptors
 	VkDescriptorPool globalDescriptorPool;
 	VkDescriptorSetLayout globalSetLayout;
@@ -75,6 +79,9 @@ struct Renderer {
 	//Compute Pipelines
 	VkPipeline iblPipeline;
 	VkPipelineLayout iblPipelineLayout;
+
+	VkPipeline lutPipeline;
+	VkPipelineLayout lutPipelineLayout;
 
 	//opaque Pipeline
 	VkPipeline opaquePipeline;

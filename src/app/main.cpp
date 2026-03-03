@@ -17,7 +17,7 @@ Config config
 			.DEFAULT_SPECULAR = "./res/cubemaps/default_specular.ktx2",
 			.DEFAULT_BRDF_LUT = "./res/cubemaps/default_lut.ktx2",
 			.DEFAULT_TEXTURE_PATH = "./res/textures/default_texture.ktx2",
-			.MODEL_PATH = "./res/models/kobold.glb",
+			.MODEL_PATH = "./res/models/DragonAttenuation.glb",
 };
 
 int main() {

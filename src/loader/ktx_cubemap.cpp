@@ -101,6 +101,28 @@ void createCubeImageView(State* state,
         throw std::runtime_error("failed to create cube image view!");
     }
 }
+void createCubeSampler(State* state, VkSampler& sampler, uint32_t mipLevels)
+{
+    VkSamplerCreateInfo samplerInfo{};
+    samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    samplerInfo.magFilter = VK_FILTER_LINEAR;
+    samplerInfo.minFilter = VK_FILTER_LINEAR;
+    samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    samplerInfo.anisotropyEnable = VK_FALSE;
+    samplerInfo.maxAnisotropy = 1.0f;
+    samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+    samplerInfo.unnormalizedCoordinates = VK_FALSE;
+    samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    samplerInfo.minLod = 0.0f;
+    samplerInfo.maxLod = float(mipLevels - 1);
+    samplerInfo.mipLodBias = 0.0f;
+
+    if (vkCreateSampler(state->context->device, &samplerInfo, nullptr, &sampler) != VK_SUCCESS) {
+        throw std::runtime_error("failed to create cube sampler!");
+    }
+}
 
 void textureCubeImageCreate(
     State* state,
@@ -237,51 +259,118 @@ void textureCubeImageCreate(
     ktxTexture_Destroy(kTexture);
 }
 
-void computeCubeImageCreate(
-    State* state,
-    uint32_t width,
-    uint32_t height,
-    VkFormat format,
-    uint32_t mipLevels,
-    VkImage& outImage,
-    VkDeviceMemory& outMemory)
-{
-    VkImageUsageFlags usage =
-        VK_IMAGE_USAGE_TRANSFER_DST_BIT |
-        VK_IMAGE_USAGE_SAMPLED_BIT |
-        VK_IMAGE_USAGE_STORAGE_BIT;
 
-    cubeImageCreate(
-        state,
-        width,
-        height,
-        format,
-        mipLevels,
-        usage,
-        outImage,
-        outMemory
-    );
+
+// 1) Create specular target cubemap image
+void specularCubeImageCreate(State* state, uint32_t baseSize)
+{
+    VkDevice device = state->context->device;
+
+    uint32_t mipLevels = state->texture->specularMipLevels;
+    VkFormat format = state->texture->specularFormat;
+
+    VkImageCreateInfo imgInfo{};
+    imgInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    imgInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+    imgInfo.imageType = VK_IMAGE_TYPE_2D;
+    imgInfo.format = format;
+    imgInfo.extent = { baseSize, baseSize, 1 };
+    imgInfo.mipLevels = mipLevels;
+    imgInfo.arrayLayers = 6;
+    imgInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+    imgInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    imgInfo.usage =
+        VK_IMAGE_USAGE_SAMPLED_BIT |
+        VK_IMAGE_USAGE_STORAGE_BIT |
+        VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    imgInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    imgInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+    PANIC(vkCreateImage(device, &imgInfo, nullptr, &state->texture->computeImage),
+        "Failed to create specular cubemap image");
+
+    VkMemoryRequirements memReq{};
+    vkGetImageMemoryRequirements(device, state->texture->computeImage, &memReq);
+
+    VkMemoryAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocInfo.allocationSize = memReq.size;
+    allocInfo.memoryTypeIndex = findMemoryType(state, memReq, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+    PANIC(vkAllocateMemory(device, &allocInfo, nullptr, &state->texture->computeImageMemory),
+        "Failed to allocate specular cubemap memory");
+
+    vkBindImageMemory(device, state->texture->computeImage, state->texture->computeImageMemory, 0);
+}
+// 2) Cube view for sampling in fragment shader
+void specularCubeViewCreate(State* state)
+{
+    VkDevice device = state->context->device;
+
+    VkImageViewCreateInfo viewInfo{};
+    viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    viewInfo.image = state->texture->computeImage;
+    viewInfo.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
+    viewInfo.format = state->texture->specularFormat;
+    viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    viewInfo.subresourceRange.baseMipLevel = 0;
+    viewInfo.subresourceRange.levelCount = state->texture->specularMipLevels;
+    viewInfo.subresourceRange.baseArrayLayer = 0;
+    viewInfo.subresourceRange.layerCount = 6;
+
+    PANIC(vkCreateImageView(device, &viewInfo, nullptr, &state->texture->computeImageView),
+        "Failed to create specular cube image view");
 }
 
-void createCubeSampler(State* state, VkSampler& sampler, uint32_t mipLevels)
+// 3) Sampler for specular cubemap
+void specularSamplerCreate(State* state)
 {
-    VkSamplerCreateInfo samplerInfo{};
-    samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-    samplerInfo.magFilter = VK_FILTER_LINEAR;
-    samplerInfo.minFilter = VK_FILTER_LINEAR;
-    samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-    samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-    samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-    samplerInfo.anisotropyEnable = VK_FALSE;
-    samplerInfo.maxAnisotropy = 1.0f;
-    samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-    samplerInfo.unnormalizedCoordinates = VK_FALSE;
-    samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-    samplerInfo.minLod = 0.0f;
-    samplerInfo.maxLod = (float)mipLevels;
-    samplerInfo.mipLodBias = 0.0f;
+    VkDevice device = state->context->device;
 
-    if (vkCreateSampler(state->context->device, &samplerInfo, nullptr, &sampler) != VK_SUCCESS) {
-        throw std::runtime_error("failed to create cube sampler!");
+    VkSamplerCreateInfo samp{};
+    samp.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    samp.magFilter = VK_FILTER_LINEAR;
+    samp.minFilter = VK_FILTER_LINEAR;
+    samp.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    samp.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    samp.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    samp.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    samp.anisotropyEnable = VK_FALSE;
+    samp.maxAnisotropy = 1.0f;
+    samp.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+    samp.unnormalizedCoordinates = VK_FALSE;
+    samp.compareEnable = VK_FALSE;
+    samp.minLod = 0.0f;
+    samp.maxLod = float(state->texture->specularMipLevels - 1);
+
+    PANIC(vkCreateSampler(device, &samp, nullptr, &state->texture->computeSampler),
+        "Failed to create specular sampler");
+}
+
+// 4) Per-mip 2D array views for compute writes
+void computeMipViewsCreate(State* state)
+{
+    VkDevice device = state->context->device;
+    uint32_t mipLevels = state->texture->specularMipLevels;
+
+    state->renderer->computeMipViews.resize(mipLevels);
+
+    for (uint32_t mip = 0; mip < mipLevels; ++mip)
+    {
+        VkImageViewCreateInfo viewInfo{};
+        viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        viewInfo.image = state->texture->computeImage;
+        viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY; // IMPORTANT
+        viewInfo.format = state->texture->specularFormat;
+        viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        viewInfo.subresourceRange.baseMipLevel = mip;
+        viewInfo.subresourceRange.levelCount = 1;
+        viewInfo.subresourceRange.baseArrayLayer = 0;
+        viewInfo.subresourceRange.layerCount = 6;
+
+        PANIC(vkCreateImageView(device, &viewInfo, nullptr, &state->renderer->computeMipViews[mip]),
+            "Failed to create compute mip view");
     }
 }
+
+

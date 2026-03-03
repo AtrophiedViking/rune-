@@ -333,37 +333,27 @@ vec2 refractOffset(vec3 Nvs, vec3 Vvs)
 
 vec2 refractUVDepthAwareVS(vec3 worldPos, vec3 N, vec3 V)
 {
-    // --- 1. Transform everything into view space ---
+    // 1. View-space transforms
     mat3 worldToView = mat3(ubo.view);
 
     vec3 Nvs = normalize(worldToView * N);
     vec3 Vvs = normalize(worldToView * V);
-
-    // Position in view space
     vec3 Pvs = (ubo.view * vec4(worldPos, 1.0)).xyz;
 
-    // --- 2. Compute refracted ray in view space ---
+    // 2. Refracted ray in view space
     float eta = 1.0 / uMat.ior;
-    vec3 Rvs = refract(-Vvs, Nvs, eta);
-    Rvs = normalize(Rvs);
+    vec3 Rvs = normalize(refract(-Vvs, Nvs, eta));
 
-    // Thickness controls how far we march
+    // 3. Start from the fragment's screen UV
+    vec2 baseUV = fragSceneUV;
+    float baseDepth = texture(sceneDepth, baseUV).r;
+
     float maxDist = getThickness();
     const int steps = 24;
     float tStep = maxDist / float(steps);
 
-    // --- 3. Project starting point to screen ---
-    vec4 clip0 = ubo.proj * vec4(Pvs, 1.0);
-    vec3 ndc0  = clip0.xyz / clip0.w;
-    vec2 uv0   = ndc0.xy * 0.5 + 0.5;
+    vec2 lastUV = baseUV;
 
-    if (uv0.x < 0.0 || uv0.x > 1.0 || uv0.y < 0.0 || uv0.y > 1.0)
-        return clamp(fragSceneUV, vec2(0.001), vec2(0.999));
-
-    float lastDepthTex = texture(sceneDepth, uv0).r;
-    vec2 lastUV = uv0;
-
-    // --- 4. March along refracted ray in view space ---
     for (int i = 1; i <= steps; ++i)
     {
         float t = float(i) * tStep;
@@ -372,26 +362,26 @@ vec2 refractUVDepthAwareVS(vec3 worldPos, vec3 N, vec3 V)
         // Project to clip space
         vec4 clip = ubo.proj * vec4(sampleVS, 1.0);
         vec3 ndc  = clip.xyz / clip.w;
-        vec2 uv   = ndc.xy * 0.5 + 0.5;
 
-        // Stop if off‑screen
+        // Vulkan NDC z is [0,1]
+        float rayDepth = ndc.z;
+
+        vec2 uv = ndc.xy * 0.5 + 0.5;
         if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0)
             break;
 
-        float depthTex = texture(sceneDepth, uv).r;
+        float sceneDepth = texture(sceneDepth, uv).r;
 
-        // --- 5. Detect intersection with opaque geometry ---
-        if (depthTex < lastDepthTex - 1e-3)
+        // Hit when the ray goes behind the scene depth
+        if (rayDepth >= sceneDepth - 1e-3)
         {
-            vec2 hitUV = mix(lastUV, uv, 0.5);
-            return clamp(hitUV, vec2(0.001), vec2(0.999));
+            return clamp(uv, vec2(0.001), vec2(0.999));
         }
 
         lastUV = uv;
-        lastDepthTex = depthTex;
     }
 
-    // No hit → return last valid UV
+    // No hit → fall back to last valid / base UV
     return clamp(lastUV, vec2(0.001), vec2(0.999));
 }
 
@@ -555,7 +545,7 @@ void main()
     if (transmission > 0.0)
     {
         // Compute refracted UV using your new function
-        vec2 refractUV = refractUVDepthAwareVS(fragWorldPos, N, V);
+        vec2 refractUV = fragSceneUV;
 
         // Sample scene color
         vec3 sceneRefract = texture(sceneColor, refractUV).rgb;
@@ -606,7 +596,7 @@ void main()
     // -----------------------------
     // WBOIT alpha
     // -----------------------------
-    float alpha = baseColor.a * (1.0 - transmission);
+    float alpha = baseColor.a;
     if (alpha <= 0.0) discard;
 
     outAccum  = vec4(color * alpha, alpha);

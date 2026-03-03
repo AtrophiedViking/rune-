@@ -325,5 +325,8 @@
     <None Include="res\shaders\transparent.frag">
       <Filter>res\shaders</Filter>
     </None>
+    <None Include="res\shaders\lut.comp">
+      <Filter>res\shaders</Filter>
+    </None>
   </ItemGroup>
 </Project>
