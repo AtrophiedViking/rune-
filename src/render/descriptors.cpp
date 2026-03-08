@@ -818,7 +818,7 @@ void presentSetLayoutCreate(State* state) {
 		.pImmutableSamplers = nullptr,
 	};
 
-	VkDescriptorSetLayoutBinding accumBinding{
+	VkDescriptorSetLayoutBinding accumBinding0{
 		.binding = 1,
 		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 		.descriptorCount = 1,
@@ -826,7 +826,7 @@ void presentSetLayoutCreate(State* state) {
 		.pImmutableSamplers = nullptr,
 	};
 
-	VkDescriptorSetLayoutBinding revealBinding{
+	VkDescriptorSetLayoutBinding revealBinding0{
 		.binding = 2,
 		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 		.descriptorCount = 1,
@@ -834,8 +834,24 @@ void presentSetLayoutCreate(State* state) {
 		.pImmutableSamplers = nullptr,
 	};
 
-	std::array<VkDescriptorSetLayoutBinding, 3> bindings{
-		sceneBinding, accumBinding, revealBinding
+	VkDescriptorSetLayoutBinding accumBinding1{
+		.binding = 3,
+		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+		.pImmutableSamplers = nullptr,
+	};
+
+	VkDescriptorSetLayoutBinding revealBinding1{
+		.binding = 4,
+		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+		.pImmutableSamplers = nullptr,
+	};
+
+	std::array<VkDescriptorSetLayoutBinding, 5> bindings{
+		sceneBinding, accumBinding0, revealBinding0, accumBinding1, revealBinding1 
 	};
 
 	VkDescriptorSetLayoutCreateInfo layoutInfo{
@@ -879,19 +895,31 @@ void presentDescriptorSetUpdate(State* state) {
 		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 	};
 
-	VkDescriptorImageInfo accumInfo{
+	VkDescriptorImageInfo accumInfo0{
 		.sampler = state->texture->sceneColorSampler, // reuse sampler
-		.imageView = state->texture->transAccumImageView,
+		.imageView = state->texture->transAccumImageView0,
 		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 	};
 
-	VkDescriptorImageInfo revealInfo{
+	VkDescriptorImageInfo revealInfo0{
 		.sampler = state->texture->sceneColorSampler, // reuse sampler
-		.imageView = state->texture->transRevealImageView,
+		.imageView = state->texture->transRevealImageView0,
+		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+	};
+	
+	VkDescriptorImageInfo accumInfo1{
+		.sampler = state->texture->sceneColorSampler, // reuse sampler
+		.imageView = state->texture->transAccumImageView1,
 		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 	};
 
-	std::array<VkWriteDescriptorSet, 3> writes{};
+	VkDescriptorImageInfo revealInfo1{
+		.sampler = state->texture->sceneColorSampler, // reuse sampler
+		.imageView = state->texture->transRevealImageView1,
+		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+	};
+
+	std::array<VkWriteDescriptorSet, 5> writes{};
 
 	writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 	writes[0].dstSet = state->renderer->presentSet;
@@ -905,14 +933,28 @@ void presentDescriptorSetUpdate(State* state) {
 	writes[1].dstBinding = 1;
 	writes[1].descriptorCount = 1;
 	writes[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	writes[1].pImageInfo = &accumInfo;
+	writes[1].pImageInfo = &accumInfo0;
 
 	writes[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 	writes[2].dstSet = state->renderer->presentSet;
 	writes[2].dstBinding = 2;
 	writes[2].descriptorCount = 1;
 	writes[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	writes[2].pImageInfo = &revealInfo;
+	writes[2].pImageInfo = &revealInfo0;
+
+	writes[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	writes[3].dstSet = state->renderer->presentSet;
+	writes[3].dstBinding = 3;
+	writes[3].descriptorCount = 1;
+	writes[3].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	writes[3].pImageInfo = &accumInfo0;
+
+	writes[4].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	writes[4].dstSet = state->renderer->presentSet;
+	writes[4].dstBinding = 4;
+	writes[4].descriptorCount = 1;
+	writes[4].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	writes[4].pImageInfo = &revealInfo0;
 
 	vkUpdateDescriptorSets(
 		state->context->device,
@@ -1071,11 +1113,6 @@ void uniformBuffersUpdate(State* state) {
 	ubo.exposure = 1.0f;
 	ubo.gamma = 1.0f;
 	ubo.prefilteredCubeMipLevels = float(state->texture->specularMipLevels - 1);
-	printf("envMipLevels=%u specularMipLevels=%u prefilteredCubeMipLevels=%f\n",
-		state->texture->envMipLevels,
-		state->texture->specularMipLevels,
-		ubo.prefilteredCubeMipLevels);
-
 	ubo.scaleIBLAmbient = 1.0f;
 
 	// Write into the mapped global UBO buffer for this frame

@@ -83,10 +83,12 @@ void transparentFrameBuffersCreate(State* state)
         : state->texture->msaaDepthImageView;    // MSAA depth (same as opaque)
 
     for (uint32_t i = 0; i < count; ++i) {
-        std::array<VkImageView, 3> attachments = {
-            state->texture->transAccumImageView,  // 0
-            state->texture->transRevealImageView, // 1
-            depthView                             // 2 (shared with opaque)
+        std::array<VkImageView, 5> attachments = {
+            state->texture->transAccumImageView0,  // 0
+            state->texture->transRevealImageView0, // 1
+            state->texture->transAccumImageView1,  // 2
+            state->texture->transRevealImageView1, // 3
+            depthView                              // 4 (shared with opaque)
         };
 
         VkFramebufferCreateInfo fb{};

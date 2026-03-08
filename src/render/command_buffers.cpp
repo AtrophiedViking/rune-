@@ -233,17 +233,19 @@ void commandBufferRecord(State* state)
     }
 
     // 6. PASS 2: TRANSPARENT
-    std::array<VkClearValue, 3> transClears{};
-    transClears[0].color = { { 0.0f, 0.0f, 0.0f, 0.0f } };
-    transClears[1].color = { { 1.0f, 0.0f, 0.0f, 0.0f } };
-    transClears[2].depthStencil = { 1.0f, 0 };
+    std::array<VkClearValue, 5> transClears{};
+    transClears[0].color = { { 0.0f, 0.0f, 0.0f, 0.0f } }; 
+    transClears[1].color = { { 1.0f, 0.0f, 0.0f, 0.0f } }; 
+    transClears[2].color = { { 0.0f, 0.0f, 0.0f, 0.0f } };
+    transClears[3].color = { { 1.0f, 0.0f, 0.0f, 0.0f } };
+    transClears[4].depthStencil = { 1.0f, 0 };
 
     VkRenderPassBeginInfo transInfo{
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
         .renderPass = state->renderer->transparencyRenderPass,
         .framebuffer = state->buffers->transparencyFramebuffers[imageIndex],
         .renderArea = {{0,0}, state->window.swapchain.imageExtent},
-        .clearValueCount = 3,
+        .clearValueCount = 5,
         .pClearValues = transClears.data(),
     };
 

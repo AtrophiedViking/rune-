@@ -125,7 +125,6 @@ void brdfLutPipelineCreate(State* state)
     vkDestroyShaderModule(state->context->device, computeShaderModule, nullptr);
 }
 
-
 //Graphics Pipelines
 void skyboxPipelineCreate(State* state) {
 	//ShaderModules
@@ -567,34 +566,61 @@ void transparencyPipelineCreate(State* state) {
 	};
 
 	// attachment 0: accumulation
-	VkPipelineColorBlendAttachmentState accumBlend{};
-	accumBlend.blendEnable = VK_TRUE;
-	accumBlend.colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
+	VkPipelineColorBlendAttachmentState accumBlend0{};
+	accumBlend0.blendEnable = VK_TRUE;
+	accumBlend0.colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
 		VK_COLOR_COMPONENT_G_BIT |
 		VK_COLOR_COMPONENT_B_BIT |
 		VK_COLOR_COMPONENT_A_BIT;
 	// C_accum += vec4(color.rgb * alpha, alpha)
-	accumBlend.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
-	accumBlend.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
-	accumBlend.colorBlendOp = VK_BLEND_OP_ADD;
-	accumBlend.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-	accumBlend.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-	accumBlend.alphaBlendOp = VK_BLEND_OP_ADD;
+	accumBlend0.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+	accumBlend0.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
+	accumBlend0.colorBlendOp = VK_BLEND_OP_ADD;
+	accumBlend0.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+	accumBlend0.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+	accumBlend0.alphaBlendOp = VK_BLEND_OP_ADD;
 
 	// attachment 1: revealage
-	VkPipelineColorBlendAttachmentState revealBlend{};
-	revealBlend.blendEnable = VK_TRUE;
-	revealBlend.colorWriteMask = VK_COLOR_COMPONENT_R_BIT;
+	VkPipelineColorBlendAttachmentState revealBlend0{};
+	revealBlend0.blendEnable = VK_TRUE;
+	revealBlend0.colorWriteMask = VK_COLOR_COMPONENT_R_BIT;
 	// R_reveal *= (1 - alpha)
-	revealBlend.srcColorBlendFactor = VK_BLEND_FACTOR_ZERO;
-	revealBlend.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-	revealBlend.colorBlendOp = VK_BLEND_OP_ADD;
-	revealBlend.srcAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
-	revealBlend.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-	revealBlend.alphaBlendOp = VK_BLEND_OP_ADD;
+	revealBlend0.srcColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+	revealBlend0.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+	revealBlend0.colorBlendOp = VK_BLEND_OP_ADD;
+	revealBlend0.srcAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+	revealBlend0.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+	revealBlend0.alphaBlendOp = VK_BLEND_OP_ADD;
+	// attachment 0: accumulation
+	VkPipelineColorBlendAttachmentState accumBlend1{};
+	accumBlend1.blendEnable = VK_TRUE;
+	accumBlend1.colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
+		VK_COLOR_COMPONENT_G_BIT |
+		VK_COLOR_COMPONENT_B_BIT |
+		VK_COLOR_COMPONENT_A_BIT;
+	// C_accum += vec4(color.rgb * alpha, alpha)
+	accumBlend1.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+	accumBlend1.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
+	accumBlend1.colorBlendOp = VK_BLEND_OP_ADD;
+	accumBlend1.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+	accumBlend1.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+	accumBlend1.alphaBlendOp = VK_BLEND_OP_ADD;
 
-	std::array<VkPipelineColorBlendAttachmentState, 2> blendAttachments{
-		accumBlend, revealBlend
+	// attachment 1: revealage
+	VkPipelineColorBlendAttachmentState revealBlend1{};
+	revealBlend1.blendEnable = VK_TRUE;
+	revealBlend1.colorWriteMask = VK_COLOR_COMPONENT_R_BIT;
+	// R_reveal *= (1 - alpha)
+	revealBlend1.srcColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+	revealBlend1.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+	revealBlend1.colorBlendOp = VK_BLEND_OP_ADD;
+	revealBlend1.srcAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+	revealBlend1.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+	revealBlend1.alphaBlendOp = VK_BLEND_OP_ADD;
+
+	std::array<VkPipelineColorBlendAttachmentState, 4> blendAttachments{
+		accumBlend0, revealBlend0,
+		accumBlend1, revealBlend1
 	};
 
 	VkPipelineColorBlendStateCreateInfo colorBlending{
@@ -901,7 +927,6 @@ void createComputeMipViews(State* state)
 			"Failed to create compute mip view");
 	}
 }
-
 void iblPrefilterDispatch(State* state, uint32_t baseSize)
 {
 	VkDevice device = state->context->device;
@@ -1039,8 +1064,6 @@ void iblPrefilterDispatch(State* state, uint32_t baseSize)
 
 	vkFreeCommandBuffers(device, pool, 1, &cmd);
 }
-
-
 void brdfLutGenerate(State* state)
 {
 	VkCommandBuffer cmd = beginSingleTimeCommands(state, state->renderer->commandPool);

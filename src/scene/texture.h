@@ -32,8 +32,6 @@ struct Texture{
 	VkImageView cubeImageView;
 	VkSampler cubeSampler;
 	uint32_t cubeMipLevels;
-
-
 	uint32_t mipLevels;
 
 
@@ -41,13 +39,21 @@ struct Texture{
 	VkDeviceMemory colorImageMemory;
 	VkImageView colorImageView;
 
-	VkImage transAccumImage;
-	VkDeviceMemory transAccumImageMemory;
-	VkImageView transAccumImageView;
+	VkImage transAccumImage0;
+	VkDeviceMemory transAccumImageMemory0;
+	VkImageView transAccumImageView0;
 	
-	VkImage transRevealImage;
-	VkDeviceMemory transRevealImageMemory;
-	VkImageView transRevealImageView;
+	VkImage transRevealImage0;
+	VkDeviceMemory transRevealImageMemory0;
+	VkImageView transRevealImageView0;
+
+	VkImage transAccumImage1;
+	VkDeviceMemory transAccumImageMemory1;
+	VkImageView transAccumImageView1;
+	
+	VkImage transRevealImage1;
+	VkDeviceMemory transRevealImageMemory1;
+	VkImageView transRevealImageView1;
 
 	VkImage msaaDepthImage;
 	VkDeviceMemory msaaDepthImageMemory;

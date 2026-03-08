@@ -316,11 +316,8 @@ void mainloop(State *state) {
 		glfwPollEvents();
 		updateFPS(state);
 		processInput(state);
-
 		uniformBuffersUpdate(state);
-
 		frameDraw(state);
-
 	};
 		vkDeviceWaitIdle(state->context->device);
 };

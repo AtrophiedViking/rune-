@@ -353,7 +353,7 @@ void main()
     }
 
     // Normal + view + reflection (world space)
-    vec3 N = normalize(fragNormal);
+    vec3 N = getNormalFromMap();
 
     // Derive camera position from view matrix (world space)
     vec3 V = normalize(ubo.camPos.xyz - fragWorldPos);
@@ -376,24 +376,24 @@ void main()
     // Proper glTF IBL (split-sum)
     // ─────────────────────────────────────────────
     
-    // 1. Diffuse irradiance (convolved env)
-    vec3 diffIBL = texture(envIrradiance, N).rgb;
-    
-    // 2. Prefiltered specular env (mip chain)
-    float mip = roughness * ubo.prefilteredCubeMipLevels;
-    vec3 prefiltered = textureLod(envSpecular, R, mip).rgb;
-    
-    // 3. BRDF LUT (2D RG)
     float NdotV = max(dot(N, V), 0.0);
-    vec2 brdf = texture(brdfLUT, vec2(NdotV, roughness)).rg;
+    vec2 brdf   = texture(brdfLUT, vec2(NdotV, roughness)).rg;
     
-    // 4. Specular IBL
-    vec3 specIBL = prefiltered * (F0 * brdf.x + brdf.y);
+    vec3 kS = FresnelSchlick(NdotV, F0);
+    vec3 kD = (vec3(1.0) - kS) * (1.0 - metallic);
     
-    // 5. Final IBL
-    vec3 ibl = (1.0 - metallic) * diffIBL * albedo + specIBL;
-
-
+    // 1. Diffuse IBL
+    vec3 diffIBL = texture(envIrradiance, N).rgb;
+    vec3 diffuse = diffIBL * albedo;
+    
+    // 2. Specular IBL
+    float mip        = roughness * ubo.prefilteredCubeMipLevels;
+    vec3 prefiltered = textureLod(envSpecular, R, mip).rgb;
+    vec3 specIBL     = prefiltered * (F0 * brdf.x + brdf.y);
+    
+    // 3. Final IBL
+    vec3 ibl = kD * diffuse + specIBL;
+    
     // Direct lighting
     vec3 Lo = vec3(0.0);
     for (int i = 0; i < 4; ++i) {
@@ -432,7 +432,7 @@ void main()
     }
 
     // No old ambient; use IBL instead
-    vec3 lit = ibl + Lo;
+    vec3 lit = Lo + ibl * occlusion;
 
     float transmission = getTransmission();
 
@@ -451,11 +451,11 @@ void main()
     }
 
     // Tone map + gamma on lit part only
-    vec3 color = vec3(1.0) - exp(-lit * ubo.exposure);
-    color = pow(color, vec3(1.0 / ubo.gamma));
+    vec3 colorLinear = lit + emissive;
 
-    // Add emissive AFTER tone mapping (emissive is linear)
-    color += emissive;
+    vec3 color = vec3(1.0) - exp(-colorLinear * ubo.exposure);
+    color = pow(color, vec3(1.0 / ubo.gamma));
+    
 
     float alpha = baseColor.a;
 

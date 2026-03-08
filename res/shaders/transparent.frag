@@ -108,8 +108,10 @@ layout(location = 7) in vec2 fragSceneUV;
 // ─────────────────────────────────────────────
 // Output
 // ─────────────────────────────────────────────
-layout(location = 0) out vec4 outAccum;   // color * alpha, alpha
-layout(location = 1) out float outReveal; // revealage
+layout(location = 0) out vec4 outAccum0;  
+layout(location = 1) out float outReveal0;
+layout(location = 2) out vec4 outAccum1;  
+layout(location = 3) out float outReveal1;
 
 // ─────────────────────────────────────────────
 // Helpers
@@ -537,68 +539,81 @@ void main()
     vec3 lit = ibl + Lo;
     lit *= occlusion;
 
+// -----------------------------
+// Refraction (physically-based)
+// -----------------------------
+float transmission = getTransmission();
+
+if (transmission > 0.0)
+{
+    // --- 1. Scene refraction (screen-space) ---
+    vec2 refractUV = fragSceneUV;
+    vec3 sceneRefract = texture(sceneColor, refractUV).rgb;
+    sceneRefract = applyVolumeToTransmission(sceneRefract);
+
+    // --- 2. Environment refraction (cube) ---
+    mat3 worldToView = mat3(ubo.view);
+    mat3 viewToWorld = mat3(inverse(ubo.view));
+
+    vec3 Nvs = normalize(worldToView * N);
+    vec3 Vvs = normalize(worldToView * V);
+
+    float eta = 1.0 / uMat.ior;
+    vec3 Rvs = refract(-Vvs, Nvs, eta);
+    vec3 Rws = normalize(viewToWorld * Rvs);
+
+    float mipRefr = roughness * maxMip;
+    vec3 envRefract = textureLod(envSpecular, Rws, mipRefr).rgb;
+    envRefract = applyVolumeToTransmission(envRefract);
+
+    // --- 3. Combine scene + env refraction ---
+    // Scene gets priority at shallow angles, env at steep angles
+    float sceneBias = 1; // tweakable
+    vec3 refractedColor = mix(envRefract, sceneRefract, sceneBias);
+
+    // --- 4. Fresnel split (reflection vs refraction) ---
+    float NdotV_f = max(dot(N, V), 0.0);
+    vec3 Fview = FresnelSchlick(NdotV_f, F0);
+
+    // Final physically-based surface color
+    // reflection = lit (already computed)
+    // refraction = refractedColor
+    lit = Fview * lit + (1.0 - Fview) * refractedColor;
+}
+
+
+    // 1. Linear lighting result
+    vec3 colorLinear = lit + emissive;
+    
     // -----------------------------
-    // Refraction (VIEW-SPACE, DEPTH-AWARE)
+    // Physical transmittance (Beer–Lambert)
     // -----------------------------
-    float transmission = getTransmission();
-
-    if (transmission > 0.0)
-    {
-        // Compute refracted UV using your new function
-        vec2 refractUV = fragSceneUV;
-
-        // Sample scene color
-        vec3 sceneRefract = texture(sceneColor, refractUV).rgb;
-        sceneRefract = applyVolumeToTransmission(sceneRefract);
-
-        // Compute env refraction direction
-        mat3 worldToView = mat3(ubo.view);
-        mat3 viewToWorld = mat3(inverse(ubo.view));
-
-        vec3 Nvs = normalize(worldToView * N);
-        vec3 Vvs = normalize(worldToView * V);
-        float eta = 1.0 / uMat.ior;
-        vec3 Rvs = refract(-Vvs, Nvs, eta);
-        vec3 Rws = normalize(viewToWorld * Rvs);
-
-        float mipRefr = roughness * maxMip;
-        vec3 envRefract = textureLod(envSpecular, Rws, mipRefr).rgb;
-        envRefract = applyVolumeToTransmission(envRefract);
-
-        float NdotV_f = max(dot(N, V), 0.0);
-        vec3 Fview    = FresnelSchlick(NdotV_f, F0);
-        Fview = mix(Fview, vec3(1.0), 0.2);
-
-        float sceneWeight = transmission * 0.4;
-        float envWeight   = transmission - sceneWeight;
-
-        vec3 refractedColor =
-            envRefract   * envWeight +
-            sceneRefract * sceneWeight;
-
-        float transWeight = transmission * (1.0 - Fview.r);
-        transWeight = min(transWeight, 0.6);
-
-        float maxReplace = 0.4;
-        float w = min(transWeight, maxReplace);
-
-        lit = mix(lit, refractedColor, w);
-    }
-
-    // -----------------------------
-    // Tone map + gamma
-    // -----------------------------
-    vec3 color = vec3(1.0) - exp(-lit * ubo.exposure);
-    color = pow(color, vec3(1.0 / ubo.gamma));
-
-    color += emissive;
-
-    // -----------------------------
-    // WBOIT alpha
-    // -----------------------------
-    float alpha = baseColor.a;
+    // NOTE: we REUSE the existing `transmission` variable declared earlier.
+    // DO NOT redeclare it here.
+    
+    float thick = getThickness();      // 0..1 scaled thickness
+    
+    // Beer–Lambert attenuation
+    float dist  = pc.attenuation.w;    // attenuation distance
+    float ratio = (dist > 0.0) ? thick / dist : 0.0;
+    
+    // Per-channel attenuation
+    vec3 att = pow(pc.attenuation.xyz, vec3(ratio));
+    
+    // Convert vec3 → scalar transmittance
+    float T = transmission * max(max(att.r, att.g), att.b);
+    
+    // Final alpha = removed light
+    float alpha = clamp(1.0 - T, 0.0, 1.0);
     if (alpha <= 0.0) discard;
-
-    outAccum  = vec4(color * alpha, alpha);
-    outReveal = alpha;
+    
+    // -----------------------------
+    // WBOIT outputs (linear HDR)
+    // -----------------------------
+    float k = 1.0; // tweakable
+    outAccum0  = vec4(colorLinear * alpha, alpha);
+    outReveal0 = exp(-alpha * k);
+    
+    outAccum1  = vec4(0.0, 0.0, 0.0, 0.0);
+    outReveal1 = 1.0;
 }
